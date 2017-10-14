@@ -1,0 +1,85 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="favicon.ico" />
+<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;"/>
+<title>Wei's Portfolio</title>
+</head>
+
+<link rel="stylesheet" type="text/css" href="css/basic.css">
+<link rel="stylesheet" type="text/css" href="css/about.css">
+<!--如果使用者之視窗寬度 <= 768px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/tablet.css" media="screen and (max-width: 767px)">
+<!--如果使用者之視窗寬度介於 768px ~ 979px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/desktop.css" media="screen and (min-width: 768px) and (max-width: 979px)">
+<!--如果使用者之視窗寬度 >= 1200px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/desktop_xl.css" media="screen and (min-width: 1200px)">
+<!--如果使用者之裝置寬度 <= 480px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/mobile.css" media="screen and (max-width: 480px)">
+
+<link rel="stylesheet" media="all and (device-width: 768px) and (device-height: 1024px) and (orientation:portrait)" href="css/ipad-portrait.css" />
+<link rel="stylesheet" media="all and (device-width: 768px) and (device-height: 1024px) and (orientation:landscape)" href="css/ipad-landscape.css" />
+
+<script src="js/jquery-1.9.1.js"></script>
+<script src="js/loadfont.js"></script>
+<script src="js/winresize.js"></script>
+<script language="javascript" type="text/javascript">
+  $(window).load(function() {
+    $('#loading').hide();
+  });
+</script>
+
+<body onload="nav_drop()">
+<div id="loading"><img id="loading-image" src="images/loading.gif" alt="Loading..." /></div>
+<div class="top">
+    <a href="index.html"><div class="logo"><img src="images/logo.png" alt="Wei's Portfolio" title="Wei's Portfolio"/></div></a> 
+    <button class="menucube">MENU</button>
+    <nav class="nav" id="nav_dropdown">
+      <ul>
+          <li><a href="index.html">Project</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a href="mailto:awai29@gmail.com">Contact</a></li>
+      </ul>
+    </nav>
+</div>
+
+  <!--aboutme-->
+  <div class="info">
+      <a href="mailto:awai29@gmail.com"><mail>awai29@gmail.com</mail></a>
+      <a href="#"><phone>0975388552</phone></a>
+  </div>
+  
+  <div class="autobiography">
+      <div class="wei"></div>
+      <h1><hi>Hello</hi> I'M Wei<p>您好，我是吳昭緯</p></h1>
+      <div class="about_all">
+          <h3>進入這個產業是這樣開始的</h3>  
+          <span>
+             多元化的城市「台北」培養我對設計的觀感與熱情，走在路上喜歡 停‧看‧聽，接受不同的刺激與衝擊，希望將來有一天設計讓人「哇！」的作品。
+             或是藉由設計改變甚麼。大學主修資管，卻不影響我對設計的憧憬，常常出沒於應用美術系，奠定美感與設計基礎。並且利用課餘時間幫社團、
+             系辦設計網站，希望可以藉由實務經驗，提升自己的能力。 
+          </span>
+          
+          <h3>穩扎穩打 向前邁進</h3>  
+          <span>
+             誰說資管畢業就不能做設計，熟悉程式反而助我一臂之力，懂得怎麼跟程式人員溝通，懂得怎樣將設計發揮得更好，更懂得如何有效的創造好設計。
+             從小助理到資深設計，最基礎的EDM、Banner、專案製作、創意發想到提案規劃每一次的專案，讓自己可以隨時保有挑戰不同任務的創造力，
+             希望用設計與創意為不同產品 / 作品帶來生命。除此之外更累積跨部門合作的溝通協調能力。 
+          </span>
+            
+          <h3>自我期許 不斷接受挑戰</h3>  
+          <span>
+             深深感受到「活到老、學到老」的真諦，唯有源源不絕的補充能量，才能讓自己保有競爭力以及新鮮的思維。除了要求自己要多看設計作品、
+             展覽之外，也利用閒暇時間的進修程式，讓自己保有不同面向刺激的觀點，及隨時做好接受各式各樣挑戰的心態，期許自己在這條熱情不滅的道路上繼續往前進，不斷成長。  
+          </span>
+      </div>    
+  </div>
+
+<script>
+$( "button" ).click(function() {
+  $( "nav" ).slideToggle( "slow" );
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+/*如果使用者之視窗寬度介於 768px ~ 979px，將會再載入這裡的 CSS。*/
+
+
+/*====================================index====================================*/
+
+.project_text{
+    width: 100%;
+	height:80px;
+	margin:0;
+	padding:0;
+    padding-bottom: 0%;
+    -moz-border-radius: 0%;
+    -webkit-border-radius: 0%; 
+    border-radius: 0%;
+    opacity:0.8;
+	position: absolute;
+	bottom:0;
+	left:0;
+}
+
+.project_text h1 {	
+	margin:5% 0 0 0;
+	padding:0;	
+	font-size:1rem;
+	height:100%;
+	position:absolute;
+}
+
+.project_text h1 span{
+	font-size:1.2rem;
+	line-height:1.7em;
+}
+
+#project .piccolo {
+	width:50%;
+    height:60%;
+}
+
+/*===================================project===================================*/
+
+#post-bg {
+	height:400px;
+}
+
+#post-cont {
+	margin-top:470px;		  
+}
+
+img,iframe,#post-cont-img img
+{
+	width:95%;
+}
+
+
+/*===================================about===================================*/
+
+.info{
+	background-position:26% 50%;
+}
+
+.info mail{
+	top: auto;
+	bottom:100px;
+	width:320px;
+	opacity:0.7;
+	text-indent:0px;
+	text-align:right;
+	color:#aaa;	 					
+}
+
+.info mail:hover{
+	width:320px;		
+}
+
+.info phone{
+	top: auto;
+	bottom:30px;
+	width:230px;		
+	opacity:0.7;
+    text-indent:0px;
+	text-align:right;
+	color:#aaa;	 	 
+}
+
+.info phone:hover{
+	width:240px;			
+}

@@ -1,0 +1,82 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="favicon.ico" />
+<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;"/>
+<title>Wei's Portfolio</title>
+</head>
+
+<link rel="stylesheet" type="text/css" href="css/basic.css">
+<link rel="stylesheet" type="text/css" href="css/project.css">
+<!--如果使用者之視窗寬度 <= 768px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/tablet.css" media="screen and (max-width: 767px)">
+<!--如果使用者之視窗寬度介於 768px ~ 979px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/desktop.css" media="screen and (min-width: 768px) and (max-width: 979px)">
+<!--如果使用者之視窗寬度 >= 1200px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/desktop_xl.css" media="screen and (min-width: 1200px)">
+<!--如果使用者之裝置寬度 <= 480px，將會再載入這裡的 CSS。-->
+<link rel="stylesheet" type="text/css" href="css/mobile.css" media="screen and (max-width: 480px)">
+
+<script src="js/jquery-1.9.1.js"></script>
+<script src="js/loadfont.js"></script>
+<script src="js/responsive-iframes.js"></script>
+<script src="js/winresize.js"></script>
+<script language="javascript" type="text/javascript">
+  $(window).load(function() {
+    $('#loading').hide();
+  });
+</script>
+
+<body onload="nav_drop()">
+<div id="loading"><img id="loading-image" src="images/loading.gif" alt="Loading..." /></div>
+<div class="top">
+    <a href="index.html"><div class="logo"><img src="images/logo.png" alt="Wei's Portfolio" title="Wei's Portfolio"/></div></a> 
+    <button class="menucube">MENU</button>
+    <nav class="nav">
+      <ul>
+          <li><a href="index.html">Project</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a href="mailto:awai29@gmail.com">Contact</a></li>
+      </ul>
+    </nav>
+</div>
+
+<div id="post-bg" style="background: url(images/showcase/vwin/main.jpg) no-repeat;background-size:cover;background-position:50% 50%;"></div>
+<div id="post-cont">
+    <div class="cont-text">
+        <h1>Official Site</h1>
+        <h2 style="letter-spacing:-1px;">Vwin</h2>
+         <!--<p>Client：<span>Payeasy</span></p>-->
+        <p>Work：<span>Prototype / Visual Design / UI Design / CSS</span></p>
+        <div class="work-text">
+          <p>Vwin.com為博彩平台網站，包含中國、越南、泰國、韓國不同市場，致力於打造一流的線上娛樂體驗。</p>
+          在前期參與初期的品牌規劃、Prototype規劃，負責頁面整體的UI視覺及UX體驗，致力於打造一流的線上娛樂平台。在廣告製作及後期維護，則是扮演藝術指導的角色，維持品牌的一致性。
+        </div>
+        <a href="https://540cb19f9bd76fed24565602afca3384969fa04f.googledrive.com/host/0Bw05_dsEKTGZfm4zamxid1dUM1pXSlI0blBXWEhXcldGRTRuUlVLQjZ2TURqMVY4TlBUNTA/index.html" target="_blank" class="visit_btn">Visit site </a>
+        <div class="note-text">
+          (平台暫不支援台灣，此為內部測試版本)
+        </div>        
+    </div>
+    <div id="post-cont-img"> 
+        <img src="images/showcase/vwin/10.jpg" style="margin-top:40px;"/> 
+        <img src="images/showcase/vwin/9.jpg">
+        <img src="images/showcase/vwin/8.jpg"/> 
+        <img src="images/showcase/vwin/11.jpg"/> 
+        <img src="images/showcase/vwin/1.jpg" />        
+        <img src="images/showcase/vwin/2.jpg" /> 
+        <img src="images/showcase/vwin/3.jpg"/>          
+        <img src="images/showcase/vwin/4.jpg" /> 
+        <img src="images/showcase/vwin/5.jpg" /> 
+        <img src="images/showcase/vwin/6.jpg" />                        
+        <img src="images/showcase/vwin/7.jpg" style="margin-bottom:40px;"/> 
+    </div>    
+</div>
+
+<script>
+$( "button" ).click(function() {
+  $( "nav" ).slideToggle( "slow" );
+});
+</script>
+</body>
+</html>
