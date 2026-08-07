@@ -29,11 +29,12 @@
   <h1>巴黎鐵塔 · 3D → 2D Demo</h1>
   <p>
     套用同一套 <a href="https://github.com/Kenton-GMI/sakura-crossing" target="_blank" rel="noopener">sakura-crossing</a>
-    渲染技巧（cel shading、螢幕空間墨線、反殼外框、色調分離）搭建的巴黎鐵塔與戰神廣場周邊。
+    渲染技巧（cel shading、螢幕空間墨線、反殼外框、色調分離）搭建的巴黎場景：鐵塔、戰神廣場、奧斯曼式街廓、
+    塞納河，河中小島上還有聖母院。拖曳鏡頭往東（右）走可以一路從鐵塔逛到聖母院。
   </p>
   <div class="row"><input type="checkbox" id="chkInk" checked><label for="chkInk"><span class="key">O</span>墨線</label></div>
   <div class="row"><input type="checkbox" id="chkGrade" checked><label for="chkGrade"><span class="key">G</span>色調分離</label></div>
-  <div class="row"><input type="checkbox" id="chkOutline" checked><label for="chkOutline"><span class="key">H</span>鐵塔反殼外框</label></div>
+  <div class="row"><input type="checkbox" id="chkOutline" checked><label for="chkOutline"><span class="key">H</span>反殼外框</label></div>
   <div class="row"><input type="checkbox" id="chkBeacon" checked><label for="chkBeacon">塔頂燈光閃爍</label></div>
   <p style="margin-top:10px"><a href="cel-shading-demo.html">← 基礎 cel-shading demo</a></p>
 </div>
@@ -86,6 +87,10 @@ const PAL = {
   lampGlow: 0xffd28a,
   beacon: 0xffe6a0,
   flag: 0xb5322f,
+  cathedralStone: 0xcac2b0,
+  cathedralRoof: 0x2c2a30,
+  island: 0xb8ae95,
+  islandWall: 0x8f8672,
 };
 
 /* ============================================================== *
@@ -103,31 +108,32 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(new THREE.Color(PAL.sky), 1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(PAL.sky, 60, 260);
+scene.fog = new THREE.Fog(PAL.sky, 90, 420);
 
-const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 700);
-camera.position.set(70, 46, 95);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 900);
+camera.position.set(110, 62, 140);
 
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 20, -10);
+controls.target.set(20, 22, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 25;
-controls.maxDistance = 220;
+controls.maxDistance = 420;
 controls.maxPolarAngle = Math.PI * 0.495;
 
 /* two-light "anime" setup: warm quantised key sun, cool bounce fill
  * from the opposite quarter, violet-warm hemisphere so shadow never
  * goes flat black. */
 const sun = new THREE.DirectionalLight(PAL.sun, 2.3);
-sun.position.set(-70, 90, 40);
+sun.position.set(30, 90, 40);
+sun.target.position.set(100, 0, 10); // between the tower and Notre-Dame, so both fall inside the shadow frustum
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
-sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
-sun.shadow.camera.far = 260;
+sun.shadow.camera.left = -160; sun.shadow.camera.right = 160;
+sun.shadow.camera.top = 160; sun.shadow.camera.bottom = -160;
+sun.shadow.camera.far = 300;
 sun.shadow.bias = -0.0003;
-sun.shadow.normalBias = 0.05;
+sun.shadow.normalBias = 0.06;
 scene.add(sun, sun.target);
 
 const fill = new THREE.DirectionalLight(PAL.fill, 1.0);
@@ -246,15 +252,17 @@ function tree(x, z, scale = 1) {
 
 /* ============================================================== *
  *  Ground: plaza base, the park (Champ de Mars, south of the
- *  tower), a path down its centre, and the Seine with a bridge
- *  (Pont d'Iéna) on the north side.
+ *  tower), a path down its centre, and the Seine -- now a long
+ *  band running the width of the whole city, wide enough to carry
+ *  an island for Notre-Dame further downstream.
  * ============================================================== */
-const plaza = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
+const plaza = new THREE.Mesh(new THREE.PlaneGeometry(760, 480), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
 plaza.rotation.x = -Math.PI / 2;
+plaza.position.set(30, 0, -10);
 plaza.receiveShadow = true;
 world.add(plaza);
 
-const PARK_Z0 = -12, PARK_Z1 = -95, PARK_HALF_W = 26;
+const PARK_Z0 = -12, PARK_Z1 = -150, PARK_HALF_W = 30;
 const park = new THREE.Mesh(new THREE.PlaneGeometry(PARK_HALF_W * 2, Math.abs(PARK_Z1 - PARK_Z0)), cel(PAL.park, { bands: 3, tint: 0x3d5a48 }));
 park.rotation.x = -Math.PI / 2;
 park.position.set(0, 0.01, (PARK_Z0 + PARK_Z1) / 2);
@@ -267,42 +275,49 @@ path.position.set(0, 0.02, (PARK_Z0 + PARK_Z1) / 2);
 path.receiveShadow = true;
 world.add(path);
 
-const RIVER_Z = 22, RIVER_HALF_W = 11;
-const river = new THREE.Mesh(new THREE.PlaneGeometry(260, RIVER_HALF_W * 2), cel(PAL.river, { bands: 2, tint: 0x33506b }));
+const RIVER_Z = 22, RIVER_HALF_W = 19, RIVER_X0 = -180, RIVER_X1 = 280;
+const riverLen = RIVER_X1 - RIVER_X0;
+const river = new THREE.Mesh(new THREE.PlaneGeometry(riverLen, RIVER_HALF_W * 2), cel(PAL.river, { bands: 2, tint: 0x33506b }));
 river.rotation.x = -Math.PI / 2;
-river.position.set(0, 0.005, RIVER_Z);
+river.position.set((RIVER_X0 + RIVER_X1) / 2, 0.005, RIVER_Z);
 river.receiveShadow = true;
 world.add(river);
-const riverBand = new THREE.Mesh(new THREE.PlaneGeometry(260, RIVER_HALF_W * 0.7), cel(PAL.riverDeep, { bands: 2, tint: 0x213c53 }));
+const riverBand = new THREE.Mesh(new THREE.PlaneGeometry(riverLen, RIVER_HALF_W * 0.7), cel(PAL.riverDeep, { bands: 2, tint: 0x213c53 }));
 riverBand.rotation.x = -Math.PI / 2;
-riverBand.position.set(0, 0.006, RIVER_Z);
+riverBand.position.set((RIVER_X0 + RIVER_X1) / 2, 0.006, RIVER_Z);
 world.add(riverBand);
 
-// Pont d'Iéna, right in front of the tower
-const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(9, 0.6, RIVER_HALF_W * 2 + 6), cel(PAL.bridge, { bands: 2 }));
-bridgeDeck.position.set(0, 0.5, RIVER_Z);
-bridgeDeck.castShadow = bridgeDeck.receiveShadow = true;
-world.add(bridgeDeck);
-for (const side of [-1, 1]) {
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, RIVER_HALF_W * 2 + 6), cel(PAL.ironDeep, { bands: 2 }));
-  rail.position.set(side * 4.4, 1.1, RIVER_Z);
-  rail.castShadow = true;
-  world.add(rail);
+/** A quay bridge deck across the full river band, piers included --
+ * used for Pont d'Iéna at the tower and again at the island. */
+function quayBridge(x, deckW) {
+  const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(deckW, 0.6, RIVER_HALF_W * 2 + 6), cel(PAL.bridge, { bands: 2 }));
+  bridgeDeck.position.set(x, 0.5, RIVER_Z);
+  bridgeDeck.castShadow = bridgeDeck.receiveShadow = true;
+  world.add(bridgeDeck);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, RIVER_HALF_W * 2 + 6), cel(PAL.ironDeep, { bands: 2 }));
+    rail.position.set(x + side * deckW / 2 - side * 0.1, 1.1, RIVER_Z);
+    rail.castShadow = true;
+    world.add(rail);
+  }
+  for (let i = -1; i <= 1; i++) {
+    const pier = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), cel(PAL.bridge, { bands: 3 }));
+    pier.position.set(x, -1.4, RIVER_Z + i * RIVER_HALF_W);
+    pier.castShadow = pier.receiveShadow = true;
+    world.add(pier);
+  }
 }
-for (let i = -1; i <= 1; i++) {
-  const pier = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), cel(PAL.bridge, { bands: 3 }));
-  pier.position.set(0, -1.4, RIVER_Z + i * (RIVER_HALF_W));
-  pier.castShadow = pier.receiveShadow = true;
-  world.add(pier);
-}
+quayBridge(0, 9); // Pont d'Iéna, right in front of the tower
 
 /* ============================================================== *
- *  Streets: rows of Haussmann buildings either side of the park,
- *  plus a run along the far (north) bank of the river, echoing the
- *  Trocadéro side.
+ *  Streets: two-deep blocks of Haussmann buildings either side of
+ *  the park (a real street grid rather than a single facing row),
+ *  plus the Trocadéro side across the river, and a hazy skyline
+ *  ring far beyond the walkable city so the scene reads as a much
+ *  bigger place than what's actually modelled underfoot.
  * ============================================================== */
 const seed = (s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)(11);
-function buildRow(x, z0, z1, faceX, count) {
+function buildRow(x, z0, z1, faceX, count, jitter = 1.2) {
   const span = (z1 - z0) / count;
   for (let i = 0; i < count; i++) {
     const w = 6 + seed() * 2.5;
@@ -310,33 +325,72 @@ function buildRow(x, z0, z1, faceX, count) {
     const h = 6.5 + seed() * 3.5;
     const wall = seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt;
     const b = haussmann(w, d, h, { wallColor: wall, seed: Math.floor(seed() * 90) });
-    b.position.set(x + (seed() - 0.5) * 1.2, 0, z0 + span * (i + 0.5));
+    b.position.set(x + (seed() - 0.5) * jitter, 0, z0 + span * (i + 0.5));
     b.rotation.y = faceX > 0 ? -Math.PI / 2 : Math.PI / 2;
     world.add(b);
   }
 }
-buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 9);
-buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 9);
-// the far bank, set back beyond the river
-for (let i = 0; i < 12; i++) {
-  const x = -66 + i * 12;
-  const b = haussmann(7 + seed() * 2, 9, 7 + seed() * 3, { wallColor: seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt, seed: i + 5 });
-  b.position.set(x, 0, RIVER_Z + RIVER_HALF_W + 9 + seed() * 2);
-  world.add(b);
+// two ranks of blocks per side, with a service street between them
+buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 15);
+buildRow(-(PARK_HALF_W + 28), PARK_Z0 - 4, PARK_Z1 + 4, -1, 15);
+buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 15);
+buildRow(PARK_HALF_W + 28, PARK_Z0 - 4, PARK_Z1 + 4, 1, 15);
+
+/** A run of buildings along a fixed Z line (a riverbank street). */
+function buildBank(x0, x1, z, count, depthJitter = 2) {
+  const span = (x1 - x0) / count;
+  for (let i = 0; i < count; i++) {
+    const b = haussmann(7 + seed() * 2.5, 9 + seed() * 2, 7 + seed() * 4, {
+      wallColor: seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt, seed: i + 5,
+    });
+    b.position.set(x0 + span * (i + 0.5) + (seed() - 0.5) * 3, 0, z + (seed() - 0.5) * depthJitter);
+    world.add(b);
+  }
 }
+buildBank(-90, 150, RIVER_Z + RIVER_HALF_W + 9, 22);
+buildBank(-90, 150, RIVER_Z + RIVER_HALF_W + 24, 20);
 
 /* tree allées down both long edges of Champ de Mars */
-for (let i = 0; i < 13; i++) {
+for (let i = 0; i < 21; i++) {
   const z = PARK_Z0 - 4 - i * 6.6;
   tree(-9.5, z, 0.9 + seed() * 0.25);
   tree(9.5, z, 0.9 + seed() * 0.25);
 }
 /* lamps lining the central path */
-for (let i = 0; i < 8; i++) {
+for (let i = 0; i < 13; i++) {
   const z = PARK_Z0 - 8 - i * 10;
   lamp(-3.2, z);
   lamp(3.2, z);
 }
+
+/* ============================================================== *
+ *  Distant skyline -- a ring of hazy, unlit silhouette blocks well
+ *  past the walkable city, blended into the fog. Cheap (one flat
+ *  material, no shadows) and does most of the work of making the
+ *  place feel like a real city rather than a diorama.
+ * ============================================================== */
+function buildSkyline() {
+  const skylineMat = flat(0xaeb9c4, { transparent: true, opacity: 0.75 });
+  const g = new THREE.Group();
+  const ranges = [
+    { x0: -170, x1: 270, z: 250, count: 46 },   // far north, beyond Trocadéro
+    { x0: -170, x1: -120, z: 40, count: 6 },     // west edge, beyond the far bank row
+    { x0: 250, x1: 300, z: 60, count: 8 },       // east, past Notre-Dame
+    { x0: -60, x1: 60, z: -220, count: 16 },     // south, beyond Champ de Mars
+  ];
+  for (const r of ranges) {
+    const span = (r.x1 - r.x0) / r.count;
+    for (let i = 0; i < r.count; i++) {
+      const w = span * (0.55 + seed() * 0.4);
+      const h = 5 + seed() * 16;
+      const blk = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), skylineMat);
+      blk.position.set(r.x0 + span * (i + 0.5), h / 2, r.z + (seed() - 0.5) * 10);
+      g.add(blk);
+    }
+  }
+  world.add(g);
+}
+buildSkyline();
 
 /* ============================================================== *
  *  The tower.
@@ -389,6 +443,29 @@ function legSegment(bottom, top, rBottom, rTop, material, radialSegments = 4, te
   return mesh;
 }
 
+/**
+ * A leg as a bowed curve rather than a straight taper -- a quadratic
+ * bezier through a control point pushed outward (away from the tower's
+ * central axis) so the leg reads as concave, the way the real legs do,
+ * instead of a plain cone. Straight-line legs were the biggest reason
+ * the first pass didn't read as the Eiffel Tower from a distance.
+ */
+function curvedLeg(p0, p1, r0, r1, bowOut, segments, material, texRepeatTotal) {
+  const mid = p0.clone().lerp(p1, 0.5);
+  const outDir = new THREE.Vector3(mid.x, 0, mid.z).normalize();
+  const control = mid.clone().addScaledVector(outDir, bowOut);
+  const curve = new THREE.QuadraticBezierCurve3(p0, control, p1);
+  const pts = curve.getPoints(segments);
+  const group = new THREE.Group();
+  for (let i = 0; i < segments; i++) {
+    const ta = i / segments, tb = (i + 1) / segments;
+    const ra = THREE.MathUtils.lerp(r0, r1, ta);
+    const rb = THREE.MathUtils.lerp(r0, r1, tb);
+    group.add(legSegment(pts[i], pts[i + 1], ra, rb, material, 4, texRepeatTotal / segments));
+  }
+  return group;
+}
+
 function baseArch(p1, p2, tube, heightScale, material) {
   const span = p1.distanceTo(p2);
   const geo = new THREE.TorusGeometry(span / 2, tube, 6, 28, Math.PI);
@@ -421,8 +498,8 @@ function buildEiffelTower() {
   const legs1 = corners1.map(([x, z]) => new THREE.Vector3(x, H1, z));
   const legs2 = corners2.map(([x, z]) => new THREE.Vector3(x, H2, z));
 
-  legs0.forEach((p0, i) => g.add(legSegment(p0, legs1[i], 1.55, 0.75, legMat, 4, 4)));
-  legs1.forEach((p1, i) => g.add(legSegment(p1, legs2[i], 0.75, 0.4, legMat, 4, 3)));
+  legs0.forEach((p0, i) => g.add(curvedLeg(p0, legs1[i], 1.65, 0.72, 2.6, 4, legMat, 4)));
+  legs1.forEach((p1, i) => g.add(curvedLeg(p1, legs2[i], 0.72, 0.38, 0.6, 2, legMat, 3)));
 
   // the four base arches -- the one silhouette detail everything else rides on
   const archMat = latticeMat(4);
@@ -489,6 +566,207 @@ const deck1Shell = hullOutline(tower.deck1, 0.035, PAL.ink);
 const deck2Shell = hullOutline(tower.deck2, 0.045, PAL.ink);
 
 /* ============================================================== *
+ *  Notre-Dame, downstream on an island in the Seine.
+ *
+ *  Built in a local frame where the facade faces local -Z and the
+ *  nave runs along local +Z (an ordinary "building" convention),
+ *  then the whole group is yawed 90 deg so the facade ends up
+ *  facing west, back toward the tower, with the nave running east
+ *  into the island -- the same layout as the real Ile de la Cite.
+ *
+ *  The two identifying details that matter more than any amount of
+ *  Gothic ornament: the towers are flat-topped (no spires on them,
+ *  unlike most cathedrals), and the flèche over the crossing is
+ *  taller than either tower.
+ * ============================================================== */
+function buildGothicTexture() {
+  const c = document.createElement('canvas');
+  c.width = 48; c.height = 96;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#cac2b0';
+  ctx.fillRect(0, 0, 48, 96);
+  ctx.fillStyle = '#4a4a56';
+  ctx.beginPath();
+  ctx.moveTo(14, 72);
+  ctx.lineTo(14, 42);
+  ctx.quadraticCurveTo(14, 20, 24, 13);
+  ctx.quadraticCurveTo(34, 20, 34, 42);
+  ctx.lineTo(34, 72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#a49c88';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+const gothicTex = buildGothicTexture();
+function gothicMat(repeatX, repeatY, bands = 3) {
+  const t = gothicTex.clone();
+  t.needsUpdate = true;
+  t.repeat.set(repeatX, repeatY);
+  return cel(PAL.cathedralStone, { bands, tint: 0x565068, map: t });
+}
+
+function buildRoseTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#3a2f2a';
+  ctx.beginPath(); ctx.arc(64, 64, 62, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#e8b04a';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(64, 64, 58, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(64, 64);
+    ctx.lineTo(64 + Math.cos(a) * 58, 64 + Math.sin(a) * 58);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#f0c86a';
+  ctx.beginPath(); ctx.arc(64, 64, 15, 0, Math.PI * 2); ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+/** A triangular-prism gable roof, apex up, spanning local X, running
+ * along local Z -- built as a straight extrude so there's no rotation
+ * math to get wrong, unlike a tilted-box approach. */
+function gableRoof(halfSpanX, riseY, lenZ, material) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-halfSpanX, 0);
+  shape.lineTo(0, riseY);
+  shape.lineTo(halfSpanX, 0);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: lenZ, bevelEnabled: false });
+  geo.translate(0, 0, -lenZ / 2);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildNotreDame() {
+  const g = new THREE.Group();
+
+  const FACADE_W = 22, FACADE_D = 6, FACADE_H = 20;
+  const TOWER_W = 6.5, TOWER_H = 28;
+  const NAVE_LEN = 46, NAVE_HALF_W = 8, NAVE_WALL_H = 15, ROOF_RISE = 8;
+
+  const facade = new THREE.Mesh(new THREE.BoxGeometry(FACADE_W, FACADE_H, FACADE_D), gothicMat(5, 4));
+  facade.position.set(0, FACADE_H / 2, 0);
+  facade.castShadow = facade.receiveShadow = true;
+  g.add(facade);
+
+  const roofMat = cel(PAL.cathedralRoof, { bands: 3, tint: 0x1c1a20 });
+  [-1, 1].forEach((side) => {
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W, TOWER_H, TOWER_W), gothicMat(3, 6));
+    tower.position.set(side * (FACADE_W / 2 - TOWER_W / 2), TOWER_H / 2, 0);
+    tower.castShadow = tower.receiveShadow = true;
+    g.add(tower);
+    // a flat parapet cap -- no spire on the towers is what actually reads as Notre-Dame
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W + 0.5, 0.7, TOWER_W + 0.5), roofMat);
+    cap.position.set(side * (FACADE_W / 2 - TOWER_W / 2), TOWER_H + 0.35, 0);
+    g.add(cap);
+  });
+
+  const rose = new THREE.Mesh(new THREE.CircleGeometry(3.1, 24), flat(0xffffff, { map: buildRoseTexture() }));
+  rose.rotation.y = Math.PI;
+  rose.position.set(0, 13.4, -FACADE_D / 2 - 0.05);
+  g.add(rose);
+
+  const portalShape = new THREE.Shape();
+  portalShape.moveTo(-1.6, 0);
+  portalShape.lineTo(-1.6, 3.2);
+  portalShape.quadraticCurveTo(-1.6, 5.6, 0, 6.4);
+  portalShape.quadraticCurveTo(1.6, 5.6, 1.6, 3.2);
+  portalShape.lineTo(1.6, 0);
+  portalShape.closePath();
+  const portal = new THREE.Mesh(new THREE.ExtrudeGeometry(portalShape, { depth: 0.35, bevelEnabled: false }), roofMat);
+  portal.rotation.y = Math.PI;
+  portal.position.set(0, 0.05, -FACADE_D / 2 - 0.02);
+  g.add(portal);
+
+  const naveBody = new THREE.Mesh(new THREE.BoxGeometry(NAVE_HALF_W * 2, NAVE_WALL_H, NAVE_LEN), gothicMat(4, 3));
+  naveBody.position.set(0, NAVE_WALL_H / 2, FACADE_D / 2 + NAVE_LEN / 2);
+  naveBody.castShadow = naveBody.receiveShadow = true;
+  g.add(naveBody);
+
+  const roof = gableRoof(NAVE_HALF_W, ROOF_RISE, NAVE_LEN, roofMat);
+  roof.position.set(0, NAVE_WALL_H, FACADE_D / 2 + NAVE_LEN / 2);
+  g.add(roof);
+
+  // the flèche, over the crossing about a third of the way down the nave --
+  // taller than the towers, which is the other half of reading as Notre-Dame
+  const spireBaseY = NAVE_WALL_H + ROOF_RISE;
+  const spireZ = FACADE_D / 2 + NAVE_LEN * 0.35;
+  const spire = legSegment(
+    new THREE.Vector3(0, spireBaseY, spireZ), new THREE.Vector3(0, spireBaseY + 12, spireZ),
+    1.3, 0.12, roofMat, 4, 3
+  );
+  g.add(spire);
+  const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.4, 0.14), roofMat);
+  crossV.position.set(0, spireBaseY + 12.7, spireZ);
+  g.add(crossV);
+  const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.14, 0.14), roofMat);
+  crossH.position.set(0, spireBaseY + 12.9, spireZ);
+  g.add(crossH);
+
+  // flying buttresses -- a hint of the rhythm along both sides of the nave
+  const buttressMat = gothicMat(1, 1, 3);
+  const buttressCount = 5;
+  for (let i = 0; i < buttressCount; i++) {
+    const z = FACADE_D / 2 + 5 + (i * (NAVE_LEN - 10)) / (buttressCount - 1);
+    [-1, 1].forEach((side) => {
+      const pier = new THREE.Vector3(side * (NAVE_HALF_W + 3.2), 4.5, z);
+      const wallPt = new THREE.Vector3(side * NAVE_HALF_W, NAVE_WALL_H - 1.5, z);
+      g.add(legSegment(pier, wallPt, 0.32, 0.24, buttressMat, 4, 1));
+      const pierBase = new THREE.Mesh(new THREE.BoxGeometry(0.7, 4.5, 0.7), buttressMat);
+      pierBase.position.set(pier.x, 2.25, z);
+      pierBase.castShadow = true;
+      g.add(pierBase);
+    });
+  }
+
+  return { group: g, spire };
+}
+
+/* The island (Ile de la Cite stand-in) that carries Notre-Dame --
+ * built the same way sakura-crossing's lake sits above its terrain:
+ * a flat platform raised just above the water surface, so the river
+ * plane underneath simply disappears where the island covers it. */
+const ISLAND_X0 = 175, ISLAND_X1 = 262, ISLAND_HALF_Z = 13;
+const islandTop = new THREE.Mesh(
+  new THREE.BoxGeometry(ISLAND_X1 - ISLAND_X0, 0.5, ISLAND_HALF_Z * 2),
+  cel(PAL.island, { bands: 3, tint: 0x726a54 })
+);
+islandTop.position.set((ISLAND_X0 + ISLAND_X1) / 2, 0.28, RIVER_Z);
+islandTop.receiveShadow = true;
+world.add(islandTop);
+const islandWall = new THREE.Mesh(
+  new THREE.BoxGeometry(ISLAND_X1 - ISLAND_X0 + 0.6, 1.6, ISLAND_HALF_Z * 2 + 0.6),
+  cel(PAL.islandWall, { bands: 3 })
+);
+islandWall.position.set((ISLAND_X0 + ISLAND_X1) / 2, -0.55, RIVER_Z);
+world.add(islandWall);
+
+const notreDame = buildNotreDame();
+notreDame.group.rotation.y = Math.PI / 2;
+notreDame.group.position.set(ISLAND_X0 + 16, 0.53, RIVER_Z);
+world.add(notreDame.group);
+const spireShell = hullOutline(notreDame.spire, 0.055, PAL.ink);
+
+// two river crossings framing the island, clear of its footprint
+quayBridge(ISLAND_X0 - 12, 6);
+quayBridge(ISLAND_X1 + 12, 6);
+
+// a little riverside greenery on the island's east tip (the square behind the apse)
+tree(ISLAND_X1 - 8, RIVER_Z - 7, 0.85);
+tree(ISLAND_X1 - 8, RIVER_Z + 7, 0.85);
+tree(ISLAND_X0 + 6, RIVER_Z - 9, 0.8);
+tree(ISLAND_X0 + 6, RIVER_Z + 9, 0.8);
+
+/* ============================================================== *
  *  Post pipeline
  * ============================================================== */
 const pipeline = new Pipeline(renderer, scene, camera, {
@@ -516,7 +794,7 @@ const chkOutline = document.getElementById('chkOutline');
 const chkBeacon = document.getElementById('chkBeacon');
 function setOutline(on) {
   state.outline = on;
-  mastShell.visible = deck1Shell.visible = deck2Shell.visible = on;
+  mastShell.visible = deck1Shell.visible = deck2Shell.visible = spireShell.visible = on;
 }
 chkInk.addEventListener('change', () => pipeline.enabled.ink = chkInk.checked);
 chkGrade.addEventListener('change', () => pipeline.enabled.grade = chkGrade.checked);
