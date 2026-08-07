@@ -29,8 +29,8 @@
   <h1>巴黎鐵塔 · 3D → 2D Demo</h1>
   <p>
     套用同一套 <a href="https://github.com/Kenton-GMI/sakura-crossing" target="_blank" rel="noopener">sakura-crossing</a>
-    渲染技巧（cel shading、螢幕空間墨線、反殼外框、色調分離）搭建的巴黎場景：鐵塔、戰神廣場、奧斯曼式街廓、
-    塞納河，河中小島上還有聖母院。拖曳鏡頭往東（右）走可以一路從鐵塔逛到聖母院。
+    渲染技巧（cel shading、螢幕空間墨線、反殼外框、色調分離）搭建的巴黎場景：鐵塔、戰神廣場（南端還有凱旋門收尾）、
+    奧斯曼式街廓與路邊咖啡座、塞納河沿岸的舊書攤與往來的船、河中小島上的聖母院。拖曳鏡頭往東（右）走可以一路從鐵塔逛到聖母院。
   </p>
   <div class="row"><input type="checkbox" id="chkInk" checked><label for="chkInk"><span class="key">O</span>墨線</label></div>
   <div class="row"><input type="checkbox" id="chkGrade" checked><label for="chkGrade"><span class="key">G</span>色調分離</label></div>
@@ -91,6 +91,18 @@ const PAL = {
   cathedralRoof: 0x2c2a30,
   island: 0xb8ae95,
   islandWall: 0x8f8672,
+  awningRed: 0xa8352f,
+  awningGreen: 0x3d6b4a,
+  awningStripe: 0xf0e6d0,
+  tableTop: 0x3a3530,
+  bouquiniste: 0x2f5a40,
+  bouquinisteLid: 0x3d6e4d,
+  hull: 0x264a63,
+  hullDeck: 0xe4ddca,
+  hullCabin: 0xdfe6ea,
+  water: 0x6f97b8,
+  arcStone: 0xd8cfba,
+  fountainBasin: 0xb9b2a0,
 };
 
 /* ============================================================== *
@@ -171,13 +183,30 @@ function buildFacadeTexture() {
 }
 const facadeBase = buildFacadeTexture();
 
+/** A striped café-awning texture -- colour comes in, stripes go on a
+ * pale ground so it reads whether the café is red or green-fronted. */
+function buildAwningTexture(color) {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 16;
+  const ctx = c.getContext('2d');
+  const hex = '#' + new THREE.Color(color).getHexString();
+  const stripeHex = '#' + new THREE.Color(PAL.awningStripe).getHexString();
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 === 0 ? hex : stripeHex;
+    ctx.fillRect(i * 4, 0, 4, 16);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+
 /* ============================================================== *
  *  One Haussmann apartment block generator: cream body, canvas
  *  window texture, dark mansard roof. Every building on the streets
  *  around the park and across the river comes from this.
  * ============================================================== */
 function haussmann(w, d, h, opts = {}) {
-  const { wallColor = PAL.wallCream, seed = 1 } = opts;
+  const { wallColor = PAL.wallCream, seed = 1, cafe = false, cafeFace = 1 } = opts;
   const g = new THREE.Group();
 
   const tex = facadeBase.clone();
@@ -208,6 +237,39 @@ function haussmann(w, d, h, opts = {}) {
     chim.position.set(cx, h + roofH + 0.55, cz);
     chim.castShadow = true;
     g.add(chim);
+  }
+
+  // a street-level café: striped awning over the ground floor, a couple
+  // of round tables on the pavement -- the detail that actually makes a
+  // frontage read as "a place" rather than just a wall of windows
+  if (cafe) {
+    const stripeColor = seed % 2 === 0 ? PAL.awningRed : PAL.awningGreen;
+    const awningTex = buildAwningTexture(stripeColor);
+    const awningMat = cel(0xffffff, { bands: 2, map: awningTex, side: THREE.DoubleSide });
+    const awningW = w * 0.92, awningDepth = 1.1;
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(awningW, 0.55, awningDepth), awningMat);
+    const faceZ = cafeFace * (d / 2 + awningDepth / 2 - 0.05);
+    awning.position.set(0, 2.6, faceZ);
+    awning.rotation.x = cafeFace > 0 ? -0.18 : 0.18;
+    awning.castShadow = true;
+    g.add(awning);
+
+    for (let i = 0; i < 3; i++) {
+      const tx = (i - 1) * awningW * 0.28;
+      const tz = faceZ + cafeFace * 1.5;
+      const table = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.06, 10), cel(PAL.tableTop, { bands: 2 }));
+      table.position.set(tx, 0.72, tz);
+      table.castShadow = true;
+      g.add(table);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6), cel(PAL.lampPost, { bands: 2 }));
+      leg.position.set(tx, 0.36, tz);
+      g.add(leg);
+      for (const cside of [-1, 1]) {
+        const chair = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), cel(PAL.lampPost, { bands: 2 }));
+        chair.position.set(tx + cside * 0.5, 0.28, tz + cafeFace * 0.15);
+        g.add(chair);
+      }
+    }
   }
   return g;
 }
@@ -317,25 +379,27 @@ quayBridge(0, 9); // Pont d'Iéna, right in front of the tower
  *  bigger place than what's actually modelled underfoot.
  * ============================================================== */
 const seed = (s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)(11);
-function buildRow(x, z0, z1, faceX, count, jitter = 1.2) {
+function buildRow(x, z0, z1, faceX, count, jitter = 1.2, cafeChance = 0) {
   const span = (z1 - z0) / count;
   for (let i = 0; i < count; i++) {
     const w = 6 + seed() * 2.5;
     const d = 8 + seed() * 3;
     const h = 6.5 + seed() * 3.5;
     const wall = seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt;
-    const b = haussmann(w, d, h, { wallColor: wall, seed: Math.floor(seed() * 90) });
+    const isCafe = seed() < cafeChance;
+    const b = haussmann(w, d, h, { wallColor: wall, seed: Math.floor(seed() * 90), cafe: isCafe });
     b.position.set(x + (seed() - 0.5) * jitter, 0, z0 + span * (i + 0.5));
     b.rotation.y = faceX > 0 ? -Math.PI / 2 : Math.PI / 2;
     world.add(b);
   }
 }
-// four ranks of blocks per side, each rank its own service street
-buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 34);
+// four ranks of blocks per side, each rank its own service street --
+// the innermost rank, facing the park, gets a chance of a café frontage
+buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 34, 1.2, 0.22);
 buildRow(-(PARK_HALF_W + 28), PARK_Z0 - 4, PARK_Z1 + 4, -1, 34);
 buildRow(-(PARK_HALF_W + 48), PARK_Z0 - 4, PARK_Z1 + 4, -1, 32);
 buildRow(-(PARK_HALF_W + 68), PARK_Z0 - 4, PARK_Z1 + 4, -1, 30);
-buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 34);
+buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 34, 1.2, 0.22);
 buildRow(PARK_HALF_W + 28, PARK_Z0 - 4, PARK_Z1 + 4, 1, 34);
 buildRow(PARK_HALF_W + 48, PARK_Z0 - 4, PARK_Z1 + 4, 1, 32);
 buildRow(PARK_HALF_W + 68, PARK_Z0 - 4, PARK_Z1 + 4, 1, 30);
@@ -367,6 +431,152 @@ for (let i = 0; i < 30; i++) {
   const z = PARK_Z0 - 8 - i * 10;
   lamp(-3.2, z);
   lamp(3.2, z);
+}
+
+/* ============================================================== *
+ *  A fountain partway down the park, and the Arc de Triomphe
+ *  closing the vista at its far (south) end -- the second landmark,
+ *  and a different kind of arch to Notre-Dame's pointed gothic one:
+ *  a single round-headed opening through a plain stone block.
+ * ============================================================== */
+function buildFountain(x, z, radius) {
+  const g = new THREE.Group();
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.05, 0.6, 20), cel(PAL.fountainBasin, { bands: 3 }));
+  basin.position.y = 0.3;
+  basin.castShadow = basin.receiveShadow = true;
+  g.add(basin);
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.88, radius * 0.88, 0.1, 20), cel(PAL.water, { bands: 2, tint: 0x2f4d63 }));
+  water.position.y = 0.56;
+  g.add(water);
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 1.6, 10), cel(PAL.fountainBasin, { bands: 3 }));
+  pedestal.position.y = 1.4;
+  pedestal.castShadow = true;
+  g.add(pedestal);
+  const jet = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.3, 8), flat(0xdcecf5, { transparent: true, opacity: 0.6 }));
+  jet.position.y = 2.75;
+  g.add(jet);
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+buildFountain(0, PARK_Z1 + 46, 4.2);
+
+function buildArcDeTriomphe(x, z) {
+  const g = new THREE.Group();
+  const halfW = 15, height = 24, depthD = 9;
+  const outer = new THREE.Shape();
+  outer.moveTo(-halfW, 0);
+  outer.lineTo(halfW, 0);
+  outer.lineTo(halfW, height);
+  outer.lineTo(-halfW, height);
+  outer.closePath();
+
+  const archHalfW = halfW * 0.4, springY = height * 0.42, archTop = height * 0.82;
+  const hole = new THREE.Path();
+  hole.moveTo(-archHalfW, 0);
+  hole.lineTo(-archHalfW, springY);
+  hole.quadraticCurveTo(-archHalfW, archTop, 0, archTop);
+  hole.quadraticCurveTo(archHalfW, archTop, archHalfW, springY);
+  hole.lineTo(archHalfW, 0);
+  hole.closePath();
+  outer.holes.push(hole);
+
+  const stoneMat = cel(PAL.arcStone, { bands: 3, tint: 0x5a5468 });
+  const bodyGeo = new THREE.ExtrudeGeometry(outer, { depth: depthD, bevelEnabled: false });
+  bodyGeo.translate(0, 0, -depthD / 2);
+  const body = new THREE.Mesh(bodyGeo, stoneMat);
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+
+  const cornice = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + 1, 1.3, depthD + 1), stoneMat);
+  cornice.position.y = height + 0.65;
+  cornice.castShadow = true;
+  g.add(cornice);
+
+  // shallow relief panels either side of the arch, just enough incident
+  // shadow to read as sculpture rather than a blank face
+  [-1, 1].forEach((side) => {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(halfW * 0.7, height * 0.62, 0.3), cel(PAL.arcStone, { bands: 3, tint: 0x4a4458 }));
+    panel.position.set(side * halfW * 0.62, height * 0.42, depthD / 2 + 0.02);
+    panel.castShadow = true;
+    g.add(panel);
+  });
+
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+buildArcDeTriomphe(0, PARK_Z1 - 16);
+
+/* ============================================================== *
+ *  Bouquiniste stalls along both quais, and a handful of boats
+ *  gliding down the Seine -- the two details that make the river
+ *  read as used rather than just a blue strip on the ground.
+ * ============================================================== */
+function bouquiniste(x, z, faceSign) {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.9, 1.1), cel(PAL.bouquiniste, { bands: 2 }));
+  box.position.y = 0.75;
+  box.castShadow = box.receiveShadow = true;
+  g.add(box);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(3.35, 0.12, 1.25), cel(PAL.bouquinisteLid, { bands: 2 }));
+  lid.position.set(0, 1.22, faceSign * -0.12);
+  lid.rotation.x = faceSign * 0.16;
+  lid.castShadow = true;
+  g.add(lid);
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+for (let x = -150; x <= 350; x += 17) {
+  bouquiniste(x + (seed() - 0.5) * 3, RIVER_Z - RIVER_HALF_W + 1.2, -1);
+  bouquiniste(x + (seed() - 0.5) * 3, RIVER_Z + RIVER_HALF_W - 1.2, 1);
+}
+
+function buildBoat(len) {
+  const g = new THREE.Group();
+  const beam = len * 0.26, draft = 0.9, half = beam / 2;
+  const hullMat = cel(PAL.hull, { bands: 3, tint: 0x24405a });
+
+  // hull footprint in the shape's XY plane (X = beam, Y = length, pointed
+  // bow at +Y), extruded vertically for the draft -- one watertight shape
+  // rather than a box with separate bow/stern pieces glued on.
+  const shape = new THREE.Shape();
+  shape.moveTo(0, len / 2);
+  shape.quadraticCurveTo(half, len / 2 - len * 0.18, half, len * 0.16);
+  shape.lineTo(half, -len / 2 + len * 0.1);
+  shape.quadraticCurveTo(half, -len / 2, 0, -len / 2);
+  shape.quadraticCurveTo(-half, -len / 2, -half, -len / 2 + len * 0.1);
+  shape.lineTo(-half, len * 0.16);
+  shape.quadraticCurveTo(-half, len / 2 - len * 0.18, 0, len / 2);
+  shape.closePath();
+  const hullGeo = new THREE.ExtrudeGeometry(shape, { depth: draft, bevelEnabled: false });
+  hullGeo.rotateX(-Math.PI / 2); // shape Y (length) -> -Z, extrude depth (draft) -> Y
+  hullGeo.rotateY(Math.PI);      // bow ends up at +Z instead of -Z
+  const hull = new THREE.Mesh(hullGeo, hullMat);
+  hull.castShadow = hull.receiveShadow = true;
+  g.add(hull);
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(beam * 0.94, 0.5, len * 0.68), cel(PAL.hullDeck, { bands: 2 }));
+  deck.position.y = draft + 0.25;
+  deck.castShadow = deck.receiveShadow = true;
+  g.add(deck);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(beam * 0.8, 0.5, len * 0.5), cel(PAL.hullCabin, { bands: 2, tint: 0x5a6068 }));
+  cabin.position.y = draft + 0.75;
+  cabin.castShadow = true;
+  g.add(cabin);
+
+  return g;
+}
+const boats = [];
+for (let i = 0; i < 5; i++) {
+  const len = 10 + seed() * 5;
+  const boat = buildBoat(len);
+  const lane = i % 2 === 0 ? -1 : 1;
+  boat.position.set(RIVER_X0 + 40 + i * ((RIVER_X1 - RIVER_X0 - 80) / 5), 0, RIVER_Z + lane * RIVER_HALF_W * 0.45);
+  boat.rotation.y = lane > 0 ? Math.PI : 0; // lanes run opposite ways, like real river traffic
+  world.add(boat);
+  boats.push({ mesh: boat, speed: 1.4 + seed() * 0.8, dir: lane > 0 ? -1 : 1 });
 }
 
 /* ============================================================== *
@@ -825,6 +1035,11 @@ function frame() {
   } else {
     tower.beaconLight.intensity = 0.7;
   }
+  for (const b of boats) {
+    b.mesh.position.x += b.dir * b.speed * dt;
+    if (b.mesh.position.x > RIVER_X1 - 30) b.mesh.position.x = RIVER_X0 + 30;
+    if (b.mesh.position.x < RIVER_X0 + 30) b.mesh.position.x = RIVER_X1 - 30;
+  }
   controls.update();
   pipeline.render();
   requestAnimationFrame(frame);
@@ -832,7 +1047,7 @@ function frame() {
 frame();
 
 // expose a little for tuning from the console, same convention sakura-crossing uses
-window.__scene = { scene, camera, controls, pipeline, tower, THREE };
+window.__scene = { scene, camera, controls, pipeline, tower, boats, THREE };
 </script>
 </body>
 </html>
