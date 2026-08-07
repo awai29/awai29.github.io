@@ -108,9 +108,9 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(new THREE.Color(PAL.sky), 1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(PAL.sky, 90, 420);
+scene.fog = new THREE.Fog(PAL.sky, 110, 620);
 
-const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 900);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 1400);
 camera.position.set(110, 62, 140);
 
 const controls = new OrbitControls(camera, canvas);
@@ -118,22 +118,22 @@ controls.target.set(20, 22, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 25;
-controls.maxDistance = 420;
+controls.maxDistance = 700;
 controls.maxPolarAngle = Math.PI * 0.495;
 
 /* two-light "anime" setup: warm quantised key sun, cool bounce fill
  * from the opposite quarter, violet-warm hemisphere so shadow never
  * goes flat black. */
 const sun = new THREE.DirectionalLight(PAL.sun, 2.3);
-sun.position.set(30, 90, 40);
-sun.target.position.set(100, 0, 10); // between the tower and Notre-Dame, so both fall inside the shadow frustum
+sun.position.set(50, 110, 50);
+sun.target.position.set(190, 0, 15); // between the tower and Notre-Dame, so both fall inside the shadow frustum
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -160; sun.shadow.camera.right = 160;
-sun.shadow.camera.top = 160; sun.shadow.camera.bottom = -160;
-sun.shadow.camera.far = 300;
-sun.shadow.bias = -0.0003;
-sun.shadow.normalBias = 0.06;
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.camera.left = -260; sun.shadow.camera.right = 260;
+sun.shadow.camera.top = 260; sun.shadow.camera.bottom = -260;
+sun.shadow.camera.far = 400;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.18;
 scene.add(sun, sun.target);
 
 const fill = new THREE.DirectionalLight(PAL.fill, 1.0);
@@ -256,13 +256,13 @@ function tree(x, z, scale = 1) {
  *  band running the width of the whole city, wide enough to carry
  *  an island for Notre-Dame further downstream.
  * ============================================================== */
-const plaza = new THREE.Mesh(new THREE.PlaneGeometry(760, 480), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
+const plaza = new THREE.Mesh(new THREE.PlaneGeometry(1400, 820), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
 plaza.rotation.x = -Math.PI / 2;
-plaza.position.set(30, 0, -10);
+plaza.position.set(80, 0, -30);
 plaza.receiveShadow = true;
 world.add(plaza);
 
-const PARK_Z0 = -12, PARK_Z1 = -150, PARK_HALF_W = 30;
+const PARK_Z0 = -12, PARK_Z1 = -260, PARK_HALF_W = 38;
 const park = new THREE.Mesh(new THREE.PlaneGeometry(PARK_HALF_W * 2, Math.abs(PARK_Z1 - PARK_Z0)), cel(PAL.park, { bands: 3, tint: 0x3d5a48 }));
 park.rotation.x = -Math.PI / 2;
 park.position.set(0, 0.01, (PARK_Z0 + PARK_Z1) / 2);
@@ -275,7 +275,7 @@ path.position.set(0, 0.02, (PARK_Z0 + PARK_Z1) / 2);
 path.receiveShadow = true;
 world.add(path);
 
-const RIVER_Z = 22, RIVER_HALF_W = 19, RIVER_X0 = -180, RIVER_X1 = 280;
+const RIVER_Z = 22, RIVER_HALF_W = 24, RIVER_X0 = -320, RIVER_X1 = 460;
 const riverLen = RIVER_X1 - RIVER_X0;
 const river = new THREE.Mesh(new THREE.PlaneGeometry(riverLen, RIVER_HALF_W * 2), cel(PAL.river, { bands: 2, tint: 0x33506b }));
 river.rotation.x = -Math.PI / 2;
@@ -330,11 +330,13 @@ function buildRow(x, z0, z1, faceX, count, jitter = 1.2) {
     world.add(b);
   }
 }
-// two ranks of blocks per side, with a service street between them
-buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 15);
-buildRow(-(PARK_HALF_W + 28), PARK_Z0 - 4, PARK_Z1 + 4, -1, 15);
-buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 15);
-buildRow(PARK_HALF_W + 28, PARK_Z0 - 4, PARK_Z1 + 4, 1, 15);
+// three ranks of blocks per side, each rank its own service street
+buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 26);
+buildRow(-(PARK_HALF_W + 28), PARK_Z0 - 4, PARK_Z1 + 4, -1, 26);
+buildRow(-(PARK_HALF_W + 48), PARK_Z0 - 4, PARK_Z1 + 4, -1, 24);
+buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 26);
+buildRow(PARK_HALF_W + 28, PARK_Z0 - 4, PARK_Z1 + 4, 1, 26);
+buildRow(PARK_HALF_W + 48, PARK_Z0 - 4, PARK_Z1 + 4, 1, 24);
 
 /** A run of buildings along a fixed Z line (a riverbank street). */
 function buildBank(x0, x1, z, count, depthJitter = 2) {
@@ -347,17 +349,18 @@ function buildBank(x0, x1, z, count, depthJitter = 2) {
     world.add(b);
   }
 }
-buildBank(-90, 150, RIVER_Z + RIVER_HALF_W + 9, 22);
-buildBank(-90, 150, RIVER_Z + RIVER_HALF_W + 24, 20);
+buildBank(-170, 270, RIVER_Z + RIVER_HALF_W + 9, 38);
+buildBank(-170, 270, RIVER_Z + RIVER_HALF_W + 24, 35);
+buildBank(-170, 270, RIVER_Z + RIVER_HALF_W + 39, 32);
 
 /* tree allées down both long edges of Champ de Mars */
-for (let i = 0; i < 21; i++) {
+for (let i = 0; i < 36; i++) {
   const z = PARK_Z0 - 4 - i * 6.6;
   tree(-9.5, z, 0.9 + seed() * 0.25);
   tree(9.5, z, 0.9 + seed() * 0.25);
 }
 /* lamps lining the central path */
-for (let i = 0; i < 13; i++) {
+for (let i = 0; i < 23; i++) {
   const z = PARK_Z0 - 8 - i * 10;
   lamp(-3.2, z);
   lamp(3.2, z);
@@ -373,10 +376,10 @@ function buildSkyline() {
   const skylineMat = flat(0xaeb9c4, { transparent: true, opacity: 0.75 });
   const g = new THREE.Group();
   const ranges = [
-    { x0: -170, x1: 270, z: 250, count: 46 },   // far north, beyond Trocadéro
-    { x0: -170, x1: -120, z: 40, count: 6 },     // west edge, beyond the far bank row
-    { x0: 250, x1: 300, z: 60, count: 8 },       // east, past Notre-Dame
-    { x0: -60, x1: 60, z: -220, count: 16 },     // south, beyond Champ de Mars
+    { x0: -300, x1: 450, z: 300, count: 74 },    // far north, beyond Trocadéro
+    { x0: -300, x1: -190, z: 50, count: 10 },    // west edge, beyond the far bank row
+    { x0: 420, x1: 480, z: 70, count: 12 },      // east, past Notre-Dame
+    { x0: -90, x1: 90, z: -330, count: 22 },     // south, beyond Champ de Mars
   ];
   for (const r of ranges) {
     const span = (r.x1 - r.x0) / r.count;
@@ -735,7 +738,7 @@ function buildNotreDame() {
  * built the same way sakura-crossing's lake sits above its terrain:
  * a flat platform raised just above the water surface, so the river
  * plane underneath simply disappears where the island covers it. */
-const ISLAND_X0 = 175, ISLAND_X1 = 262, ISLAND_HALF_Z = 13;
+const ISLAND_X0 = 320, ISLAND_X1 = 407, ISLAND_HALF_Z = 13;
 const islandTop = new THREE.Mesh(
   new THREE.BoxGeometry(ISLAND_X1 - ISLAND_X0, 0.5, ISLAND_HALF_Z * 2),
   cel(PAL.island, { bands: 3, tint: 0x726a54 })
