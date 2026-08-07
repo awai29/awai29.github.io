@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>巴黎鐵塔 · 3D → 2D Demo</title>
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1922; overflow: hidden; font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  canvas { display: block; touch-action: none; }
+  #hud {
+    position: fixed; left: 16px; top: 16px; max-width: 340px;
+    color: #f4f2f6; background: rgba(20, 18, 28, 0.62); backdrop-filter: blur(6px);
+    padding: 14px 16px; border-radius: 10px; font-size: 13px; line-height: 1.55;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  }
+  #hud h1 { font-size: 15px; margin: 0 0 6px; font-weight: 600; }
+  #hud p { margin: 0 0 8px; opacity: 0.85; }
+  #hud a { color: #f0c98a; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .row label { cursor: pointer; user-select: none; }
+  .key { display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.14); font-size: 11px; margin-right: 4px; }
+  #hint { position: fixed; right: 16px; bottom: 12px; color: rgba(244,242,246,0.55); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <h1>巴黎鐵塔 · 3D → 2D Demo</h1>
+  <p>
+    套用同一套 <a href="https://github.com/Kenton-GMI/sakura-crossing" target="_blank" rel="noopener">sakura-crossing</a>
+    渲染技巧（cel shading、螢幕空間墨線、反殼外框、色調分離）搭建的巴黎鐵塔與戰神廣場周邊。
+  </p>
+  <div class="row"><input type="checkbox" id="chkInk" checked><label for="chkInk"><span class="key">O</span>墨線</label></div>
+  <div class="row"><input type="checkbox" id="chkGrade" checked><label for="chkGrade"><span class="key">G</span>色調分離</label></div>
+  <div class="row"><input type="checkbox" id="chkOutline" checked><label for="chkOutline"><span class="key">H</span>鐵塔反殼外框</label></div>
+  <div class="row"><input type="checkbox" id="chkBeacon" checked><label for="chkBeacon">塔頂燈光閃爍</label></div>
+  <p style="margin-top:10px"><a href="cel-shading-demo.html">← 基礎 cel-shading demo</a></p>
+</div>
+<div id="hint">拖曳 = 環繞鏡頭 · 滾輪 = 縮放</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./js/vendor/three/three.module.min.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './js/vendor/three/OrbitControls.js';
+import { cel, flat, hullOutline, Pipeline } from './js/celkit.js';
+
+/* ============================================================== *
+ *  Palette. Warmer than the sakura demo on purpose: late-afternoon
+ *  Paris rather than blossom season, so the grade pass leans amber
+ *  in the lights instead of pink, and the ink leans warm brown-black
+ *  rather than violet-black to sit against the tower's iron.
+ * ============================================================== */
+const PAL = {
+  ink: 0x3a2f2a,
+  sky: 0xbfd7ee,
+  sun: 0xfff0d2,
+  fill: 0xaec3e0,
+  hemiSky: 0xd9e8f5,
+  hemiGround: 0xb9ac97,
+  plaza: 0xd9d2c4,
+  road: 0xc7bfae,
+  park: 0x9db77e,
+  parkPath: 0xe0d6bd,
+  river: 0x7fa4c2,
+  riverDeep: 0x5f84a6,
+  bridge: 0xb7ada0,
+  iron: 0x8a6a4e,
+  ironDeep: 0x6e5340,
+  ironLit: 0xa88763,
+  wallCream: 0xf2e6cf,
+  wallCreamAlt: 0xecdec2,
+  mansard: 0x475266,
+  glass: 0x3b4356,
+  trunk: 0x6e5644,
+  leaf: 0x5f8a52,
+  leafDeep: 0x466b3d,
+  lampPost: 0x4a4640,
+  lampGlow: 0xffd28a,
+  beacon: 0xffe6a0,
+  flag: 0xb5322f,
+};
+
+/* ============================================================== *
+ *  Renderer / scene / camera
+ * ============================================================== */
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.setClearColor(new THREE.Color(PAL.sky), 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(PAL.sky, 60, 260);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 700);
+camera.position.set(70, 46, 95);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 20, -10);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 25;
+controls.maxDistance = 220;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+/* two-light "anime" setup: warm quantised key sun, cool bounce fill
+ * from the opposite quarter, violet-warm hemisphere so shadow never
+ * goes flat black. */
+const sun = new THREE.DirectionalLight(PAL.sun, 2.3);
+sun.position.set(-70, 90, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
+sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
+sun.shadow.camera.far = 260;
+sun.shadow.bias = -0.0003;
+sun.shadow.normalBias = 0.05;
+scene.add(sun, sun.target);
+
+const fill = new THREE.DirectionalLight(PAL.fill, 1.0);
+fill.position.set(60, 40, -50);
+scene.add(fill);
+
+const hemi = new THREE.HemisphereLight(PAL.hemiSky, PAL.hemiGround, 1.1);
+scene.add(hemi);
+
+const world = new THREE.Group();
+scene.add(world);
+
+/* ============================================================== *
+ *  Facade texture — Haussmann windows drawn at runtime with
+ *  Canvas2D, tiled with RepeatWrapping so one small texture covers
+ *  any building footprint. No image assets, same as sakura-crossing.
+ * ============================================================== */
+function buildFacadeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f2e6cf';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#3b4356';
+  ctx.fillRect(14, 8, 36, 40);
+  ctx.fillStyle = '#dcd0b4';
+  ctx.fillRect(10, 50, 44, 5);
+  ctx.strokeStyle = '#c9bc9c';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(14, 8, 36, 40);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  return tex;
+}
+const facadeBase = buildFacadeTexture();
+
+/* ============================================================== *
+ *  One Haussmann apartment block generator: cream body, canvas
+ *  window texture, dark mansard roof. Every building on the streets
+ *  around the park and across the river comes from this.
+ * ============================================================== */
+function haussmann(w, d, h, opts = {}) {
+  const { wallColor = PAL.wallCream, seed = 1 } = opts;
+  const g = new THREE.Group();
+
+  const tex = facadeBase.clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(Math.max(1, Math.round(w / 1.6)), Math.max(1, Math.round(h / 1.5)));
+  const bodyMat = cel(wallColor, { bands: 3, tint: 0x5a5468, map: tex });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bodyMat);
+  body.position.y = h / 2;
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+
+  const roofH = h * 0.22;
+  const roof = new THREE.Mesh(
+    new THREE.CylinderGeometry(Math.max(w, d) * 0.28, Math.max(w, d) * 0.64, roofH, 4),
+    cel(PAL.mansard, { bands: 3, tint: 0x2c3040 })
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = h + roofH / 2;
+  roof.castShadow = true;
+  g.add(roof);
+
+  // a few chimney pots, cheap seeded variety so a row of ten buildings doesn't repeat identically
+  const chimneyCount = 1 + (seed % 3);
+  for (let i = 0; i < chimneyCount; i++) {
+    const cx = (((seed * 37 + i * 53) % 100) / 100 - 0.5) * w * 0.6;
+    const cz = (((seed * 71 + i * 19) % 100) / 100 - 0.5) * d * 0.5;
+    const chim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), cel(PAL.mansard, { bands: 2 }));
+    chim.position.set(cx, h + roofH + 0.55, cz);
+    chim.castShadow = true;
+    g.add(chim);
+  }
+  return g;
+}
+
+/* a lamp post — warm accent against the cool grade */
+function lamp(x, z) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.2, 6), cel(PAL.lampPost, { bands: 2 }));
+  pole.position.y = 1.6;
+  pole.castShadow = true;
+  g.add(pole);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), flat(PAL.lampGlow));
+  head.position.y = 3.3;
+  g.add(head);
+  const glow = new THREE.PointLight(PAL.lampGlow, 0.5, 4, 2);
+  glow.position.y = 3.3;
+  g.add(glow);
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+
+/* a park tree: trunk + a few icosahedron canopy blobs, high-key so
+ * the shadow side stays readable rather than going a dark green lump */
+function tree(x, z, scale = 1) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * scale, 0.24 * scale, 2.2 * scale, 7), cel(PAL.trunk, { bands: 3 }));
+  trunk.position.y = 1.1 * scale;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const canopyMat = cel(PAL.leaf, { bands: 3, tint: 0x3d5a48 });
+  [[0, 0.55, 0, 1.0], [0.55, 0.25, 0.3, 0.68], [-0.5, 0.3, -0.28, 0.72], [0.15, 0.75, -0.4, 0.6]].forEach(([dx, dy, dz, s]) => {
+    const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05 * s * scale, 1), canopyMat);
+    blob.position.set(dx * scale, (2.1 + dy) * scale, dz * scale);
+    blob.castShadow = true;
+    g.add(blob);
+  });
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+
+/* ============================================================== *
+ *  Ground: plaza base, the park (Champ de Mars, south of the
+ *  tower), a path down its centre, and the Seine with a bridge
+ *  (Pont d'Iéna) on the north side.
+ * ============================================================== */
+const plaza = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
+plaza.rotation.x = -Math.PI / 2;
+plaza.receiveShadow = true;
+world.add(plaza);
+
+const PARK_Z0 = -12, PARK_Z1 = -95, PARK_HALF_W = 26;
+const park = new THREE.Mesh(new THREE.PlaneGeometry(PARK_HALF_W * 2, Math.abs(PARK_Z1 - PARK_Z0)), cel(PAL.park, { bands: 3, tint: 0x3d5a48 }));
+park.rotation.x = -Math.PI / 2;
+park.position.set(0, 0.01, (PARK_Z0 + PARK_Z1) / 2);
+park.receiveShadow = true;
+world.add(park);
+
+const path = new THREE.Mesh(new THREE.PlaneGeometry(5, Math.abs(PARK_Z1 - PARK_Z0) - 4), cel(PAL.parkPath, { bands: 2 }));
+path.rotation.x = -Math.PI / 2;
+path.position.set(0, 0.02, (PARK_Z0 + PARK_Z1) / 2);
+path.receiveShadow = true;
+world.add(path);
+
+const RIVER_Z = 22, RIVER_HALF_W = 11;
+const river = new THREE.Mesh(new THREE.PlaneGeometry(260, RIVER_HALF_W * 2), cel(PAL.river, { bands: 2, tint: 0x33506b }));
+river.rotation.x = -Math.PI / 2;
+river.position.set(0, 0.005, RIVER_Z);
+river.receiveShadow = true;
+world.add(river);
+const riverBand = new THREE.Mesh(new THREE.PlaneGeometry(260, RIVER_HALF_W * 0.7), cel(PAL.riverDeep, { bands: 2, tint: 0x213c53 }));
+riverBand.rotation.x = -Math.PI / 2;
+riverBand.position.set(0, 0.006, RIVER_Z);
+world.add(riverBand);
+
+// Pont d'Iéna, right in front of the tower
+const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(9, 0.6, RIVER_HALF_W * 2 + 6), cel(PAL.bridge, { bands: 2 }));
+bridgeDeck.position.set(0, 0.5, RIVER_Z);
+bridgeDeck.castShadow = bridgeDeck.receiveShadow = true;
+world.add(bridgeDeck);
+for (const side of [-1, 1]) {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, RIVER_HALF_W * 2 + 6), cel(PAL.ironDeep, { bands: 2 }));
+  rail.position.set(side * 4.4, 1.1, RIVER_Z);
+  rail.castShadow = true;
+  world.add(rail);
+}
+for (let i = -1; i <= 1; i++) {
+  const pier = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), cel(PAL.bridge, { bands: 3 }));
+  pier.position.set(0, -1.4, RIVER_Z + i * (RIVER_HALF_W));
+  pier.castShadow = pier.receiveShadow = true;
+  world.add(pier);
+}
+
+/* ============================================================== *
+ *  Streets: rows of Haussmann buildings either side of the park,
+ *  plus a run along the far (north) bank of the river, echoing the
+ *  Trocadéro side.
+ * ============================================================== */
+const seed = (s => () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)(11);
+function buildRow(x, z0, z1, faceX, count) {
+  const span = (z1 - z0) / count;
+  for (let i = 0; i < count; i++) {
+    const w = 6 + seed() * 2.5;
+    const d = 8 + seed() * 3;
+    const h = 6.5 + seed() * 3.5;
+    const wall = seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt;
+    const b = haussmann(w, d, h, { wallColor: wall, seed: Math.floor(seed() * 90) });
+    b.position.set(x + (seed() - 0.5) * 1.2, 0, z0 + span * (i + 0.5));
+    b.rotation.y = faceX > 0 ? -Math.PI / 2 : Math.PI / 2;
+    world.add(b);
+  }
+}
+buildRow(-(PARK_HALF_W + 8), PARK_Z0 - 4, PARK_Z1 + 4, -1, 9);
+buildRow(PARK_HALF_W + 8, PARK_Z0 - 4, PARK_Z1 + 4, 1, 9);
+// the far bank, set back beyond the river
+for (let i = 0; i < 12; i++) {
+  const x = -66 + i * 12;
+  const b = haussmann(7 + seed() * 2, 9, 7 + seed() * 3, { wallColor: seed() > 0.5 ? PAL.wallCream : PAL.wallCreamAlt, seed: i + 5 });
+  b.position.set(x, 0, RIVER_Z + RIVER_HALF_W + 9 + seed() * 2);
+  world.add(b);
+}
+
+/* tree allées down both long edges of Champ de Mars */
+for (let i = 0; i < 13; i++) {
+  const z = PARK_Z0 - 4 - i * 6.6;
+  tree(-9.5, z, 0.9 + seed() * 0.25);
+  tree(9.5, z, 0.9 + seed() * 0.25);
+}
+/* lamps lining the central path */
+for (let i = 0; i < 8; i++) {
+  const z = PARK_Z0 - 8 - i * 10;
+  lamp(-3.2, z);
+  lamp(3.2, z);
+}
+
+/* ============================================================== *
+ *  The tower.
+ *
+ *  Four tapered legs (square-section cylinders, radial=4) run from
+ *  the ground corners to the first platform, narrow further to the
+ *  second, then merge into a single tapering mast. A lattice texture
+ *  (Canvas2D, tiled) stands in for the ironwork on every leg face,
+ *  and four flattened half-torus arches at the base carry the one
+ *  silhouette detail that actually reads "Eiffel Tower" from a
+ *  distance -- everything else here is a stylised, low-poly reading
+ *  of the real structure's proportions, not a scale model.
+ * ============================================================== */
+function buildLatticeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a6a4e';
+  ctx.fillRect(0, 0, 32, 64);
+  ctx.strokeStyle = '#6e5340';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(32, 32);
+  ctx.moveTo(32, 0); ctx.lineTo(0, 32);
+  ctx.moveTo(0, 32); ctx.lineTo(32, 64);
+  ctx.moveTo(32, 32); ctx.lineTo(0, 64);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+const latticeTex = buildLatticeTexture();
+function latticeMat(bands = 3) {
+  const t = latticeTex.clone();
+  t.needsUpdate = true;
+  return cel(PAL.iron, { bands, tint: 0x4a3a2c, map: t });
+}
+
+function legSegment(bottom, top, rBottom, rTop, material, radialSegments = 4, texRepeat = 3) {
+  const dir = new THREE.Vector3().subVectors(top, bottom);
+  const len = dir.length();
+  const geo = new THREE.CylinderGeometry(rTop, rBottom, len, radialSegments, 1);
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * texRepeat);
+  uv.needsUpdate = true;
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.position.copy(bottom).add(top).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+function baseArch(p1, p2, tube, heightScale, material) {
+  const span = p1.distanceTo(p2);
+  const geo = new THREE.TorusGeometry(span / 2, tube, 6, 28, Math.PI);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.scale.y = heightScale;
+  mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+  const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir);
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildEiffelTower() {
+  const g = new THREE.Group();
+
+  const B0 = 9.0;   // half-width of the ground footprint
+  const H1 = 15;    // first platform height
+  const B1 = 4.4;   // half-width at the first platform
+  const H2 = 25.5;  // second platform height
+  const B2 = 1.9;   // half-width at the second platform
+  const H3 = 40;    // where the mast narrows to a point
+  const H4 = 45.5;  // antenna tip
+
+  const corners0 = [[B0, B0], [B0, -B0], [-B0, B0], [-B0, -B0]];
+  const corners1 = [[B1, B1], [B1, -B1], [-B1, B1], [-B1, -B1]];
+  const corners2 = [[B2, B2], [B2, -B2], [-B2, B2], [-B2, -B2]];
+
+  const legMat = latticeMat(3);
+  const legs0 = corners0.map(([x, z]) => new THREE.Vector3(x, 0, z));
+  const legs1 = corners1.map(([x, z]) => new THREE.Vector3(x, H1, z));
+  const legs2 = corners2.map(([x, z]) => new THREE.Vector3(x, H2, z));
+
+  legs0.forEach((p0, i) => g.add(legSegment(p0, legs1[i], 1.55, 0.75, legMat, 4, 4)));
+  legs1.forEach((p1, i) => g.add(legSegment(p1, legs2[i], 0.75, 0.4, legMat, 4, 3)));
+
+  // the four base arches -- the one silhouette detail everything else rides on
+  const archMat = latticeMat(4);
+  g.add(baseArch(legs0[0], legs0[1], 0.42, 1.35, archMat)); // +X face
+  g.add(baseArch(legs0[2], legs0[3], 0.42, 1.35, archMat)); // -X face
+  g.add(baseArch(legs0[0], legs0[2], 0.42, 1.35, archMat)); // +Z face
+  g.add(baseArch(legs0[1], legs0[3], 0.42, 1.35, archMat)); // -Z face
+
+  // two viewing platforms
+  const deckMat = cel(PAL.ironLit, { bands: 3, tint: 0x5a4534 });
+  const deck1 = new THREE.Mesh(new THREE.BoxGeometry(B1 * 2 + 1.4, 1.1, B1 * 2 + 1.4), deckMat);
+  deck1.position.set(0, H1, 0);
+  deck1.castShadow = deck1.receiveShadow = true;
+  g.add(deck1);
+  const deck2 = new THREE.Mesh(new THREE.BoxGeometry(B2 * 2 + 1.0, 0.9, B2 * 2 + 1.0), deckMat);
+  deck2.position.set(0, H2, 0);
+  deck2.castShadow = deck2.receiveShadow = true;
+  g.add(deck2);
+
+  // cross braces under the first platform -- a hint of the trellis
+  // between the arches and the deck, kept to one tier for draw-call cost
+  const braceMat = latticeMat(3);
+  for (let i = 0; i < corners1.length; i++) {
+    for (let j = i + 1; j < corners1.length; j++) {
+      const a = legs1[i], b = legs1[j];
+      if (a.distanceTo(b) > B1 * 2.2) continue; // skip the two diagonals, keep the four edges
+      const brace = legSegment(a.clone().setY(H1 - 0.6), b.clone().setY(H1 - 0.6), 0.22, 0.22, braceMat, 4, 1);
+      g.add(brace);
+    }
+  }
+
+  // the mast, tapering to a point, then a thin antenna
+  const mast = legSegment(new THREE.Vector3(0, H2, 0), new THREE.Vector3(0, H3, 0), 1.5, 0.18, latticeMat(4), 4, 3);
+  g.add(mast);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.1, H4 - H3, 6), cel(PAL.ironDeep, { bands: 2 }));
+  antenna.position.set(0, (H3 + H4) / 2, 0);
+  antenna.castShadow = true;
+  g.add(antenna);
+
+  const beaconMat = flat(PAL.beacon);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), beaconMat);
+  beacon.position.set(0, H4, 0);
+  g.add(beacon);
+  const beaconLight = new THREE.PointLight(PAL.beacon, 1.2, 20, 2);
+  beaconLight.position.set(0, H4, 0);
+  g.add(beaconLight);
+
+  // a small tricolour on the first platform for a dash of saturated colour
+  const poleH = 2.4;
+  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, poleH, 5), cel(PAL.ironDeep, { bands: 2 }));
+  flagPole.position.set(0, H1 + 0.55 + poleH / 2, 0);
+  g.add(flagPole);
+  const flagCloth = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), flat(PAL.flag, { side: THREE.DoubleSide }));
+  flagCloth.position.set(0.5, H1 + 0.55 + poleH - 0.35, 0);
+  g.add(flagCloth);
+
+  return { group: g, mast, deck1, deck2, beacon, beaconLight };
+}
+
+const tower = buildEiffelTower();
+world.add(tower.group);
+const mastShell = hullOutline(tower.mast, 0.05, PAL.ink);
+const deck1Shell = hullOutline(tower.deck1, 0.035, PAL.ink);
+const deck2Shell = hullOutline(tower.deck2, 0.045, PAL.ink);
+
+/* ============================================================== *
+ *  Post pipeline
+ * ============================================================== */
+const pipeline = new Pipeline(renderer, scene, camera, {
+  inkColor: PAL.ink,
+  shadowTint: 0xa89a8a,
+  lightTint: 0xfff2d8,
+});
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  pipeline.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ============================================================== *
+ *  UI
+ * ============================================================== */
+const state = { outline: true, beacon: true };
+const chkInk = document.getElementById('chkInk');
+const chkGrade = document.getElementById('chkGrade');
+const chkOutline = document.getElementById('chkOutline');
+const chkBeacon = document.getElementById('chkBeacon');
+function setOutline(on) {
+  state.outline = on;
+  mastShell.visible = deck1Shell.visible = deck2Shell.visible = on;
+}
+chkInk.addEventListener('change', () => pipeline.enabled.ink = chkInk.checked);
+chkGrade.addEventListener('change', () => pipeline.enabled.grade = chkGrade.checked);
+chkOutline.addEventListener('change', () => setOutline(chkOutline.checked));
+chkBeacon.addEventListener('change', () => state.beacon = chkBeacon.checked);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyO') { pipeline.enabled.ink = !pipeline.enabled.ink; chkInk.checked = pipeline.enabled.ink; }
+  if (e.code === 'KeyG') { pipeline.enabled.grade = !pipeline.enabled.grade; chkGrade.checked = pipeline.enabled.grade; }
+  if (e.code === 'KeyH') { setOutline(!state.outline); chkOutline.checked = state.outline; }
+});
+
+const clock = new THREE.Clock();
+let t = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 1 / 20);
+  t += dt;
+  if (state.beacon) {
+    const pulse = 0.55 + 0.45 * Math.sin(t * 3.2);
+    tower.beacon.material.color.setHex(PAL.beacon).multiplyScalar(0.6 + pulse * 0.6);
+    tower.beaconLight.intensity = 0.5 + pulse * 1.4;
+  } else {
+    tower.beaconLight.intensity = 0.7;
+  }
+  controls.update();
+  pipeline.render();
+  requestAnimationFrame(frame);
+}
+frame();
+
+// expose a little for tuning from the console, same convention sakura-crossing uses
+window.__scene = { scene, camera, controls, pipeline, tower, THREE };
+</script>
+</body>
+</html>

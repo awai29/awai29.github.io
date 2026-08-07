@@ -35,6 +35,7 @@
   <div class="row"><input type="checkbox" id="chkGrade" checked><label for="chkGrade"><span class="key">G</span>色調分離 + sRGB grade</label></div>
   <div class="row"><input type="checkbox" id="chkOutline" checked><label for="chkOutline"><span class="key">H</span>反殼外框（英雄物件）</label></div>
   <div class="row"><input type="checkbox" id="chkSpin" checked><label for="chkSpin">自動旋轉</label></div>
+  <p style="margin-top:10px"><a href="eiffel-tower-demo.html">→ 巴黎鐵塔場景 demo</a></p>
 </div>
 <div id="hint">拖曳 = 環繞鏡頭 · 滾輪 = 縮放</div>
 
@@ -49,13 +50,11 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from './js/vendor/three/OrbitControls.js';
-import { FullScreenQuad } from './js/vendor/three/Pass.js';
+import { cel, hullOutline, Pipeline } from './js/celkit.js';
 
-/* ============================================================== *
- *  Palette — a small, deliberately narrow set (pale ground, teal
- *  greens, a couple of saturated accents), same idea as sakura-
- *  crossing's PAL: keep everything else muted so the accents read.
- * ============================================================== */
+/* A small, deliberately narrow palette (pale ground, teal greens, a
+ * couple of saturated accents) — same idea as sakura-crossing's PAL:
+ * keep everything else muted so the accents read. */
 const PAL = {
   ink: 0x39324f,
   sun: 0xfff1d8,
@@ -63,94 +62,13 @@ const PAL = {
   hemiSky: 0xdcecff,
   hemiGround: 0xb6a6c6,
   ground: 0xdfe6d8,
-  road: 0x8e8a9c,
   wall: [0xfaf6ef, 0xf2e7d3, 0xd6e3ee, 0xf0dcda],
   roof: [0x59617a, 0x6b585c, 0x4f6b70],
   trunk: 0x8a6647,
-  leaf: 0x5aa578,
   blossom: 0xfbc6d8,
   accent: 0xe0453f,
 };
 
-/* ============================================================== *
- *  1. Cel material — MeshToonMaterial + a 3-step gradient ramp,
- *  patched so the *shadow* band is hue-shifted toward cool violet
- *  instead of just being a darker version of the lit colour. That
- *  tint in shadow is the single biggest thing separating "anime
- *  cel" from a plain low-poly toon shader.
- * ============================================================== */
-const rampCache = new Map();
-function gradientMap(bands = 3) {
-  if (rampCache.has(bands)) return rampCache.get(bands);
-  const stopsByBand = { 2: [96, 255], 3: [92, 178, 255], 4: [80, 142, 202, 255] };
-  const stops = stopsByBand[bands] || stopsByBand[3];
-  const data = new Uint8Array(stops.length * 4);
-  stops.forEach((v, i) => { data[i*4]=v; data[i*4+1]=v; data[i*4+2]=v; data[i*4+3]=255; });
-  const tex = new THREE.DataTexture(data, stops.length, 1, THREE.RGBAFormat);
-  tex.minFilter = tex.magFilter = THREE.NearestFilter;
-  tex.needsUpdate = true;
-  rampCache.set(bands, tex);
-  return tex;
-}
-
-const TOON_CHUNK = 'lights_toon_pars_fragment';
-const TOON_LINE = 'vec3 irradiance = getGradientIrradiance( geometryNormal, directLight.direction ) * directLight.color;';
-const TOON_PATCH = `
-  vec3 celBand = getGradientIrradiance( geometryNormal, directLight.direction );
-  vec3 irradiance = celBand * mix( uShadowTint, vec3( 1.0 ), celBand ) * directLight.color;`;
-
-let patchedChunk = null;
-{
-  const src = THREE.ShaderChunk[TOON_CHUNK];
-  if (src && src.includes(TOON_LINE)) {
-    patchedChunk = 'uniform vec3 uShadowTint;\n' + src.replace(TOON_LINE, TOON_PATCH);
-  }
-}
-
-function cel(color, { bands = 3, tint = 0x6c5f8c } = {}) {
-  const mat = new THREE.MeshToonMaterial({ color, gradientMap: gradientMap(bands), flatShading: true });
-  if (patchedChunk) {
-    const uni = { value: new THREE.Color(tint) };
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uShadowTint = uni;
-      shader.fragmentShader = shader.fragmentShader.replace(`#include <${TOON_CHUNK}>`, patchedChunk);
-    };
-    mat.customProgramCacheKey = () => 'cel_' + new THREE.Color(tint).getHexString();
-  }
-  return mat;
-}
-
-/* ============================================================== *
- *  2. Inverted-hull outline — a back-faced shell pushed out along
- *  the normal in clip space, so hero objects keep a constant pixel-
- *  width contour at any distance.
- * ============================================================== */
-function hullOutline(mesh, thickness = 0.045, color = PAL.ink) {
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { uThickness: { value: thickness }, uColor: { value: new THREE.Color(color) } },
-    vertexShader: `
-      uniform float uThickness;
-      void main() {
-        vec3 n = normalize( normalMatrix * normal );
-        vec4 clip = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-        vec3 clipN = normalize( ( projectionMatrix * vec4( n, 0.0 ) ).xyz );
-        clip.xy += clipN.xy * uThickness * clip.w * 0.5;
-        gl_Position = clip;
-      }`,
-    fragmentShader: `
-      uniform vec3 uColor;
-      void main() { gl_FragColor = vec4( uColor, 1.0 ); }`,
-    side: THREE.BackSide,
-  });
-  const shell = new THREE.Mesh(mesh.geometry, mat);
-  shell.renderOrder = -1;
-  mesh.add(shell);
-  return shell;
-}
-
-/* ============================================================== *
- *  Scene
- * ============================================================== */
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
 
@@ -199,7 +117,6 @@ scene.add(hemi);
 const world = new THREE.Group();
 scene.add(world);
 
-/* ground */
 const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 48), cel(PAL.ground, { bands: 3, tint: 0x7d76a0 }));
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -237,7 +154,7 @@ const hero = new THREE.Mesh(
 hero.position.set(0, 1.8, 0);
 hero.castShadow = hero.receiveShadow = true;
 world.add(hero);
-const heroShell = hullOutline(hero, 0.05);
+const heroShell = hullOutline(hero, 0.05, PAL.ink);
 
 /* a little blossom tree for colour */
 const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.6, 8), cel(PAL.trunk, { bands: 3 }));
@@ -252,149 +169,30 @@ const canopyMat = cel(PAL.blossom, { bands: 2, tint: 0xd9a9c4 }); // high-key: s
   world.add(blob);
 });
 
-/* ============================================================== *
- *  3 & 4. Post pipeline — render to a target with a depth texture,
- *  then: ink pass (2nd difference of linear depth) -> grade pass
- *  (split-tone + lift + sRGB) -> straight to screen.
- * ============================================================== */
-const INK_SHADER = {
-  uniforms: {
-    tDiffuse: { value: null }, tDepth: { value: null }, uTexel: { value: new THREE.Vector2() },
-    uNear: { value: 0.1 }, uFar: { value: 200 }, uInk: { value: new THREE.Color(PAL.ink) },
-    uThickness: { value: 1.4 }, uSens: { value: 0.0042 }, uConcave: { value: 0.026 }, uConcaveAmount: { value: 0.42 },
-    uFadeStart: { value: 30.0 }, uFadeEnd: { value: 65.0 }, uStrength: { value: 1.0 },
-  },
-  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-  fragmentShader: `
-    #include <packing>
-    uniform sampler2D tDiffuse, tDepth;
-    uniform vec2 uTexel;
-    uniform float uNear, uFar, uThickness, uSens, uConcave, uConcaveAmount, uFadeStart, uFadeEnd, uStrength;
-    uniform vec3 uInk;
-    varying vec2 vUv;
-    float linearDepth(vec2 uv){ float d = texture2D(tDepth, uv).x; return -perspectiveDepthToViewZ(d, uNear, uFar); }
-    void main(){
-      vec3 col = texture2D(tDiffuse, vUv).rgb;
-      vec2 t = uTexel * uThickness;
-      float dc = linearDepth(vUv);
-      float dl = linearDepth(vUv - vec2(t.x,0.0));
-      float dr = linearDepth(vUv + vec2(t.x,0.0));
-      float du = linearDepth(vUv + vec2(0.0,t.y));
-      float dd = linearDepth(vUv - vec2(0.0,t.y));
-      float sx = (dl + dr - 2.0*dc) / dc;
-      float sy = (du + dd - 2.0*dc) / dc;
-      float convex = max(0.0, sx) + max(0.0, sy);
-      float concave = max(0.0, -sx) + max(0.0, -sy);
-      float edge = smoothstep(uSens*0.32, uSens, convex);
-      edge = max(edge, smoothstep(uConcave, uConcave*3.4, concave) * uConcaveAmount);
-      edge *= 1.0 - smoothstep(uFadeStart, uFadeEnd, dc);
-      edge *= uStrength;
-      vec3 line = mix(uInk, col * 0.42, 0.22);
-      gl_FragColor = vec4(mix(col, line, clamp(edge, 0.0, 1.0)), 1.0);
-    }`,
-};
-
-const GRADE_SHADER = {
-  uniforms: {
-    tDiffuse: { value: null },
-    uShadowTint: { value: new THREE.Color(0xada8d0) }, uLightTint: { value: new THREE.Color(0xfff7e8) },
-    uSaturation: { value: 1.12 }, uLift: { value: 0.032 }, uVignette: { value: 0.15 },
-    uEnabled: { value: 1 },
-  },
-  vertexShader: INK_SHADER.vertexShader,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform vec3 uShadowTint, uLightTint;
-    uniform float uSaturation, uLift, uVignette, uEnabled;
-    varying vec2 vUv;
-    vec3 linearToSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(max(c,vec3(0.0031308)),vec3(1.0/2.4))-0.055, step(0.0031308,c)); }
-    void main(){
-      vec3 raw = texture2D(tDiffuse, vUv).rgb;
-      vec3 c = raw;
-      float l = dot(c, vec3(0.2126,0.7152,0.0722));
-      float k = smoothstep(0.02, 0.55, l);
-      c *= mix(uShadowTint, uLightTint, k);
-      c = c + uLift * (1.0 - k);
-      c = mix(vec3(l), c, uSaturation);
-      float r = length(vUv - 0.5) * 1.42;
-      c *= 1.0 - uVignette * pow(clamp(r,0.0,1.0), 2.6);
-      c = linearToSRGB(max(c, vec3(0.0)));
-      // still need the linear->sRGB conversion when grading is off, or the
-      // un-graded toggle would come out washed out against the graded one
-      vec3 rawSRGB = linearToSRGB(max(raw, vec3(0.0)));
-      gl_FragColor = vec4(mix(rawSRGB, c, uEnabled), 1.0);
-    }`,
-};
-
-function makeQuad(def) {
-  const mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(def.uniforms), vertexShader: def.vertexShader, fragmentShader: def.fragmentShader, depthTest: false, depthWrite: false });
-  return { quad: new FullScreenQuad(mat), mat };
-}
-
-const rtOpts = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, colorSpace: THREE.NoColorSpace };
-const rtScene = new THREE.WebGLRenderTarget(2, 2, rtOpts);
-rtScene.depthTexture = new THREE.DepthTexture(2, 2);
-rtScene.depthTexture.format = THREE.DepthFormat;
-rtScene.depthTexture.type = THREE.UnsignedIntType;
-rtScene.depthTexture.minFilter = rtScene.depthTexture.magFilter = THREE.NearestFilter;
-const rtA = new THREE.WebGLRenderTarget(2, 2, { ...rtOpts, depthBuffer: false });
-
-const ink = makeQuad(INK_SHADER);
-const grade = makeQuad(GRADE_SHADER);
-ink.mat.uniforms.tDepth.value = rtScene.depthTexture;
-
-const state = { ink: true, grade: true, outline: true, spin: true };
+const pipeline = new Pipeline(renderer, scene, camera, { inkColor: PAL.ink });
+const state = { outline: true, spin: true };
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h, true);
-  const scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-  const rw = Math.floor(w * scale), rh = Math.floor(h * scale);
-  rtScene.setSize(rw, rh);
-  rtA.setSize(rw, rh);
-  ink.mat.uniforms.uTexel.value.set(1 / rw, 1 / rh);
-  ink.mat.uniforms.uNear.value = camera.near;
-  ink.mat.uniforms.uFar.value = camera.far;
+  pipeline.setSize(w, h);
 }
 window.addEventListener('resize', resize);
 resize();
 
-function render() {
-  const r = renderer;
-  r.setRenderTarget(rtScene);
-  r.clear();
-  r.render(scene, camera);
-
-  let src = rtScene.texture;
-  if (state.ink) {
-    ink.mat.uniforms.tDiffuse.value = src;
-    r.setRenderTarget(rtA);
-    ink.quad.render(r);
-    src = rtA.texture;
-  }
-  grade.mat.uniforms.tDiffuse.value = src;
-  grade.mat.uniforms.uEnabled.value = state.grade ? 1 : 0;
-  r.setRenderTarget(null);
-  grade.quad.render(r);
-}
-
-/* ============================================================== *
- *  UI
- * ============================================================== */
 const chkInk = document.getElementById('chkInk');
 const chkGrade = document.getElementById('chkGrade');
 const chkOutline = document.getElementById('chkOutline');
 const chkSpin = document.getElementById('chkSpin');
-chkInk.addEventListener('change', () => state.ink = chkInk.checked);
-chkGrade.addEventListener('change', () => state.grade = chkGrade.checked);
+chkInk.addEventListener('change', () => pipeline.enabled.ink = chkInk.checked);
+chkGrade.addEventListener('change', () => pipeline.enabled.grade = chkGrade.checked);
 chkOutline.addEventListener('change', () => { state.outline = chkOutline.checked; heroShell.visible = state.outline; });
 chkSpin.addEventListener('change', () => state.spin = chkSpin.checked);
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyO') { state.ink = !state.ink; chkInk.checked = state.ink; }
-  if (e.code === 'KeyG') { state.grade = !state.grade; chkGrade.checked = state.grade; }
+  if (e.code === 'KeyO') { pipeline.enabled.ink = !pipeline.enabled.ink; chkInk.checked = pipeline.enabled.ink; }
+  if (e.code === 'KeyG') { pipeline.enabled.grade = !pipeline.enabled.grade; chkGrade.checked = pipeline.enabled.grade; }
   if (e.code === 'KeyH') { state.outline = !state.outline; heroShell.visible = state.outline; chkOutline.checked = state.outline; }
 });
 
@@ -406,11 +204,10 @@ function frame() {
     hero.rotation.x += dt * 0.18;
   }
   controls.update();
-  render();
+  pipeline.render();
   requestAnimationFrame(frame);
 }
 frame();
 </script>
 </body>
 </html>
-</content>
