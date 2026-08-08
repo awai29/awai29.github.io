@@ -726,8 +726,9 @@ buildSkyline();
  *
  *  Four tapered legs (square-section cylinders, radial=4) run from
  *  the ground corners to the first platform, narrow further to the
- *  second, then merge into a single tapering mast. A lattice texture
- *  (Canvas2D, tiled) stands in for the ironwork on every leg face,
+ *  second, then narrow again to a point above it -- open latticework
+ *  the whole way up, never a solid mass. A lattice texture (Canvas2D,
+ *  tiled) stands in for the ironwork on every leg face,
  *  and four flattened half-torus arches at the base carry the one
  *  silhouette detail that actually reads "Eiffel Tower" from a
  *  distance -- everything else here is a stylised, low-poly reading
@@ -852,7 +853,9 @@ function buildEiffelTower() {
   const B1 = 4.4;   // half-width at the first platform
   const H2 = 25.5;  // second platform height
   const B2 = 1.9;   // half-width at the second platform
-  const H3 = 40;    // where the mast narrows to a point
+  const H3 = 36.5;  // where the four legs converge to a point
+  const H3B = 38.2; // top of the small collar at that apex
+  const H4A = 43.5; // top of the thin spire cone
   const H4 = 45.5;  // antenna tip
 
   const corners0 = [[B0, B0], [B0, -B0], [-B0, B0], [-B0, -B0]];
@@ -904,11 +907,27 @@ function buildEiffelTower() {
     }
   }
 
-  // the mast, tapering to a point, then a thin antenna
-  const mast = legSegment(new THREE.Vector3(0, H2, 0), new THREE.Vector3(0, H3, 0), 1.5, 0.18, latticeMat(4), 4, 3);
-  g.add(mast);
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.1, H4 - H3, 6), cel(PAL.ironDeep, { bands: 2 }));
-  antenna.position.set(0, (H3 + H4) / 2, 0);
+  // above the second platform the real tower is still open latticework,
+  // not a solid mass -- four thin legs converging to a point, the same
+  // construction as the lower tiers, is what actually reads as "Eiffel
+  // Tower" here; a single fat cone just reads as a witch's hat.
+  const apex = new THREE.Vector3(0, H3, 0);
+  const topLegMat = latticeMat(3);
+  legs2.forEach((p2, i) => g.add(curvedLeg(p2, apex, 0.5, 0.09, 0.3, 2, topLegMat, 2)));
+
+  const collarMat = cel(PAL.ironLit, { bands: 3, tint: 0x7a5030 });
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, H3B - H3, 8), collarMat);
+  collar.position.set(0, (H3 + H3B) / 2, 0);
+  collar.castShadow = collar.receiveShadow = true;
+  g.add(collar);
+
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.42, H4A - H3B, 8), cel(PAL.ironDeep, { bands: 3 }));
+  spire.position.set(0, (H3B + H4A) / 2, 0);
+  spire.castShadow = true;
+  g.add(spire);
+
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, H4 - H4A, 6), cel(PAL.ironDeep, { bands: 2 }));
+  antenna.position.set(0, (H4A + H4) / 2, 0);
   antenna.castShadow = true;
   g.add(antenna);
 
@@ -929,12 +948,12 @@ function buildEiffelTower() {
   flagCloth.position.set(0.5, H1 + 0.55 + poleH - 0.35, 0);
   g.add(flagCloth);
 
-  return { group: g, mast, deck1, deck2, beacon, beaconLight };
+  return { group: g, spire, deck1, deck2, beacon, beaconLight };
 }
 
 const tower = buildEiffelTower();
 world.add(tower.group);
-const mastShell = hullOutline(tower.mast, 0.05, PAL.ink);
+const towerSpireShell = hullOutline(tower.spire, 0.05, PAL.ink);
 const deck1Shell = hullOutline(tower.deck1, 0.035, PAL.ink);
 const deck2Shell = hullOutline(tower.deck2, 0.045, PAL.ink);
 
@@ -1167,7 +1186,7 @@ const chkOutline = document.getElementById('chkOutline');
 const chkBeacon = document.getElementById('chkBeacon');
 function setOutline(on) {
   state.outline = on;
-  mastShell.visible = deck1Shell.visible = deck2Shell.visible = spireShell.visible = on;
+  towerSpireShell.visible = deck1Shell.visible = deck2Shell.visible = spireShell.visible = on;
 }
 chkInk.addEventListener('change', () => pipeline.enabled.ink = chkInk.checked);
 chkGrade.addEventListener('change', () => pipeline.enabled.grade = chkGrade.checked);
