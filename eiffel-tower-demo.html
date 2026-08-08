@@ -73,9 +73,9 @@ const PAL = {
   river: 0x7fa4c2,
   riverDeep: 0x5f84a6,
   bridge: 0xb7ada0,
-  iron: 0x8a6a4e,
-  ironDeep: 0x6e5340,
-  ironLit: 0xa88763,
+  iron: 0xcf9a44,
+  ironDeep: 0x8a5228,
+  ironLit: 0xe6c06a,
   wallCream: 0xf2e6cf,
   wallCreamAlt: 0xecdec2,
   mansard: 0x475266,
@@ -737,16 +737,23 @@ function buildLatticeTexture() {
   const c = document.createElement('canvas');
   c.width = 32; c.height = 64;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8a6a4e';
+  // white ground -- the map multiplies against the material's own gold
+  // colour, so painting the ground gold here too would double it up and
+  // darken the whole tower, which is what made the first pass read muddy
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, 32, 64);
-  ctx.strokeStyle = '#6e5340';
-  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = '#5a3a1e';
+  ctx.lineWidth = 3.4;
   ctx.beginPath();
   ctx.moveTo(0, 0); ctx.lineTo(32, 32);
   ctx.moveTo(32, 0); ctx.lineTo(0, 32);
   ctx.moveTo(0, 32); ctx.lineTo(32, 64);
   ctx.moveTo(32, 32); ctx.lineTo(0, 64);
   ctx.stroke();
+  // a riveted-panel border frame, echoing the reference model's ironwork edges
+  ctx.strokeStyle = '#7a5228';
+  ctx.lineWidth = 1.6;
+  ctx.strokeRect(1, 1, 30, 62);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
@@ -755,7 +762,37 @@ const latticeTex = buildLatticeTexture();
 function latticeMat(bands = 3) {
   const t = latticeTex.clone();
   t.needsUpdate = true;
-  return cel(PAL.iron, { bands, tint: 0x4a3a2c, map: t });
+  return cel(PAL.iron, { bands, tint: 0x6a4222, map: t });
+}
+
+/** A small arcaded frieze -- the row of rounded arches under the
+ * reference model's first platform, which is most of what was missing. */
+function buildArcadeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 16;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 64, 16);
+  ctx.fillStyle = '#4a2e18';
+  for (let i = 0; i < 8; i++) {
+    const x = i * 8;
+    ctx.beginPath();
+    ctx.arc(x + 4, 7, 2.8, Math.PI, 0);
+    ctx.lineTo(x + 6.8, 15);
+    ctx.lineTo(x + 1.2, 15);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+const arcadeTex = buildArcadeTexture();
+function arcadeMat(repeatX) {
+  const t = arcadeTex.clone();
+  t.needsUpdate = true;
+  t.repeat.set(repeatX, 1);
+  return cel(PAL.ironDeep, { bands: 3, tint: 0x4a2e18, map: t });
 }
 
 function legSegment(bottom, top, rBottom, rTop, material, radialSegments = 4, texRepeat = 3) {
@@ -838,7 +875,7 @@ function buildEiffelTower() {
   g.add(baseArch(legs0[1], legs0[3], 0.42, 1.35, archMat)); // -Z face
 
   // two viewing platforms
-  const deckMat = cel(PAL.ironLit, { bands: 3, tint: 0x5a4534 });
+  const deckMat = cel(PAL.ironLit, { bands: 3, tint: 0x7a5030 });
   const deck1 = new THREE.Mesh(new THREE.BoxGeometry(B1 * 2 + 1.4, 1.1, B1 * 2 + 1.4), deckMat);
   deck1.position.set(0, H1, 0);
   deck1.castShadow = deck1.receiveShadow = true;
@@ -847,6 +884,13 @@ function buildEiffelTower() {
   deck2.position.set(0, H2, 0);
   deck2.castShadow = deck2.receiveShadow = true;
   g.add(deck2);
+
+  // the arcaded frieze under the first platform -- the reference model's
+  // most distinctive detail and the thing our first pass skipped entirely
+  const arcade = new THREE.Mesh(new THREE.BoxGeometry(B1 * 2 + 1.2, 1.15, B1 * 2 + 1.2), arcadeMat(10));
+  arcade.position.set(0, H1 - 1.35, 0);
+  arcade.castShadow = arcade.receiveShadow = true;
+  g.add(arcade);
 
   // cross braces under the first platform -- a hint of the trellis
   // between the arches and the deck, kept to one tier for draw-call cost
