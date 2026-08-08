@@ -169,19 +169,57 @@ function buildFacadeTexture() {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#f2e6cf';
   ctx.fillRect(0, 0, 64, 64);
+
+  // shutters flanking the window -- the single detail that reads as
+  // "Parisian" rather than "generic apartment block" at a glance
+  ctx.fillStyle = '#7d6249';
+  ctx.fillRect(9, 8, 4, 39);
+  ctx.fillRect(51, 8, 4, 39);
+
   ctx.fillStyle = '#3b4356';
-  ctx.fillRect(14, 8, 36, 40);
-  ctx.fillStyle = '#dcd0b4';
-  ctx.fillRect(10, 50, 44, 5);
+  ctx.fillRect(14, 8, 36, 39);
   ctx.strokeStyle = '#c9bc9c';
   ctx.lineWidth = 2;
-  ctx.strokeRect(14, 8, 36, 40);
+  ctx.strokeRect(14, 8, 36, 39);
+  ctx.strokeStyle = '#2c3040';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(32, 9); ctx.lineTo(32, 46); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(15, 27); ctx.lineTo(49, 27); ctx.stroke();
+
+  // a wrought-iron balcony ledge under the window
+  ctx.fillStyle = '#c9bc9c';
+  ctx.fillRect(9, 48, 46, 3);
+  ctx.strokeStyle = '#4a4a56';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(9, 45); ctx.lineTo(55, 45); ctx.stroke();
+  for (let i = 0; i < 11; i++) {
+    const x = 10.5 + i * 4.3;
+    ctx.beginPath(); ctx.moveTo(x, 45); ctx.lineTo(x, 48); ctx.stroke();
+  }
+
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.NearestFilter;
   return tex;
 }
 const facadeBase = buildFacadeTexture();
+
+/** A flagstone paving texture -- joint lines only, so it reads at any
+ * tile scale from a pavement close-up to a plaza seen from the tower. */
+function buildPavingTexture(base, joint) {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = joint;
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillStyle = base;
+  ctx.fillRect(1, 1, 30, 14);
+  ctx.fillRect(1, 17, 14, 14);
+  ctx.fillRect(17, 17, 14, 14);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
 
 /** A striped café-awning texture -- colour comes in, stripes go on a
  * pale ground so it reads whether the café is red or green-fronted. */
@@ -227,6 +265,25 @@ function haussmann(w, d, h, opts = {}) {
   roof.position.y = h + roofH / 2;
   roof.castShadow = true;
   g.add(roof);
+
+  // a dormer window on about a third of roofs -- breaks up what would
+  // otherwise be a bare pyramid on every single building in the row
+  if (seed % 3 === 0) {
+    const dormer = new THREE.Group();
+    const dormerW = Math.min(w, d) * 0.32;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(dormerW, roofH * 0.6, 0.55), cel(PAL.mansard, { bands: 3, tint: 0x2c3040 }));
+    dormer.add(body);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(dormerW * 0.75, roofH * 0.42, 4), cel(PAL.mansard, { bands: 2 }));
+    cap.rotation.y = Math.PI / 4;
+    cap.position.y = roofH * 0.51;
+    dormer.add(cap);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(dormerW * 0.55, roofH * 0.32), flat(PAL.glass));
+    win.position.set(0, -roofH * 0.02, 0.28);
+    dormer.add(win);
+    dormer.position.set(0, h + roofH * 0.36, d * 0.28);
+    dormer.castShadow = true;
+    g.add(dormer);
+  }
 
   // a few chimney pots, cheap seeded variety so a row of ten buildings doesn't repeat identically
   const chimneyCount = 1 + (seed % 3);
@@ -274,19 +331,63 @@ function haussmann(w, d, h, opts = {}) {
   return g;
 }
 
-/* a lamp post — warm accent against the cool grade */
+/* a Belle-Époque candelabra lamp post: a fluted pole, a base collar,
+ * three globes on curved arms plus one on top -- only the top globe
+ * actually casts light, the rest are decoration so a park full of
+ * these doesn't multiply the light count the renderer has to shade. */
 function lamp(x, z) {
   const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.2, 6), cel(PAL.lampPost, { bands: 2 }));
-  pole.position.y = 1.6;
+  const postMat = cel(PAL.lampPost, { bands: 2 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.22, 8), postMat);
+  base.position.y = 0.11;
+  g.add(base);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.09, 2.85, 8), postMat);
+  pole.position.y = 1.53;
   pole.castShadow = true;
   g.add(pole);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), flat(PAL.lampGlow));
-  head.position.y = 3.3;
-  g.add(head);
-  const glow = new THREE.PointLight(PAL.lampGlow, 0.5, 4, 2);
-  glow.position.y = 3.3;
+  const collar = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), postMat);
+  collar.position.y = 2.95;
+  g.add(collar);
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.42, 6), postMat);
+    arm.position.set(side * 0.18, 3.08, 0);
+    arm.rotation.z = side * 1.0;
+    g.add(arm);
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), flat(PAL.lampGlow));
+    globe.position.set(side * 0.36, 3.22, 0);
+    g.add(globe);
+  }
+  const topGlobe = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), flat(PAL.lampGlow));
+  topGlobe.position.y = 3.45;
+  g.add(topGlobe);
+  const glow = new THREE.PointLight(PAL.lampGlow, 0.55, 4, 2);
+  glow.position.y = 3.45;
   g.add(glow);
+  g.position.set(x, 0, z);
+  world.add(g);
+  return g;
+}
+
+/* a park bench, seat-plank + iron ends -- placed along the central path */
+function bench(x, z, rotY = 0) {
+  const g = new THREE.Group();
+  const woodMat = cel(PAL.trunk, { bands: 2, tint: 0x4a3a2c });
+  const ironMat = cel(PAL.lampPost, { bands: 2 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.5), woodMat);
+  seat.position.y = 0.46;
+  seat.castShadow = seat.receiveShadow = true;
+  g.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 0.07), woodMat);
+  back.position.set(0, 0.72, -0.22);
+  back.castShadow = true;
+  g.add(back);
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.46, 0.46), ironMat);
+    leg.position.set(side * 0.75, 0.23, 0);
+    leg.castShadow = true;
+    g.add(leg);
+  }
+  g.rotation.y = rotY;
   g.position.set(x, 0, z);
   world.add(g);
   return g;
@@ -318,7 +419,9 @@ function tree(x, z, scale = 1) {
  *  band running the width of the whole city, wide enough to carry
  *  an island for Notre-Dame further downstream.
  * ============================================================== */
-const plaza = new THREE.Mesh(new THREE.PlaneGeometry(2000, 1150), cel(PAL.plaza, { bands: 2, tint: 0x8f8878 }));
+const plazaPaving = buildPavingTexture('#d9d2c4', '#c7bfae');
+plazaPaving.repeat.set(800, 460);
+const plaza = new THREE.Mesh(new THREE.PlaneGeometry(2000, 1150), cel(0xffffff, { bands: 2, tint: 0x8f8878, map: plazaPaving }));
 plaza.rotation.x = -Math.PI / 2;
 plaza.position.set(100, 0, -40);
 plaza.receiveShadow = true;
@@ -331,11 +434,21 @@ park.position.set(0, 0.01, (PARK_Z0 + PARK_Z1) / 2);
 park.receiveShadow = true;
 world.add(park);
 
-const path = new THREE.Mesh(new THREE.PlaneGeometry(5, Math.abs(PARK_Z1 - PARK_Z0) - 4), cel(PAL.parkPath, { bands: 2 }));
+const pathLen = Math.abs(PARK_Z1 - PARK_Z0) - 4;
+const pathPaving = buildPavingTexture('#e0d6bd', '#cfc2a0');
+pathPaving.repeat.set(4, Math.round(pathLen / 2.2));
+const path = new THREE.Mesh(new THREE.PlaneGeometry(5, pathLen), cel(0xffffff, { bands: 2, map: pathPaving }));
 path.rotation.x = -Math.PI / 2;
 path.position.set(0, 0.02, (PARK_Z0 + PARK_Z1) / 2);
 path.receiveShadow = true;
 world.add(path);
+
+/* benches along the central path, alternating sides with the lamps */
+for (let i = 0; i < 15; i++) {
+  const z = PARK_Z0 - 14 - i * 20;
+  bench(-5.4, z, Math.PI / 2);
+  bench(5.4, z, -Math.PI / 2);
+}
 
 const RIVER_Z = 22, RIVER_HALF_W = 30, RIVER_X0 = -420, RIVER_X1 = 620;
 const riverLen = RIVER_X1 - RIVER_X0;
